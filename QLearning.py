@@ -57,7 +57,6 @@ def qLearning(env, num_episodes, discount_factor=0.95,
     # 2. Initialize the table with zeros.
     Q = defaultdict(lambda: np.zeros(env.action_space.n))
 
-    # todo: check usage of decay rate.
     # 3. Choose initial values for the hyper-parameters: learning rate 𝛼, discount
     #    factor 𝛾, decay rate for decaying epsilon-greedy probability.
 
