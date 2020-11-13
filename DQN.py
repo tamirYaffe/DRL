@@ -1,4 +1,5 @@
 import os
+import pickle
 import random
 from collections import deque
 import gym
@@ -33,24 +34,44 @@ def epsilonGreedyAction(state, exploration_rate, model):
     return action
 
 
-def experience_replay(target_model, QValue_model, memory, batch_size, discount_factor, update_steps, c_steps):
+def experience_replay(target_model, QValue_model, memory, batch_size, discount_factor, update_steps, c_steps,
+                      observation_space):
     minibatch = random.sample(memory, batch_size)
-    for state, action, reward, state_next, done in minibatch:
-        Y = reward
-        if not done:
-            Y = (reward + discount_factor * np.amax(target_model.predict(state_next)[0]))
-        Q_values = QValue_model.predict(state)
-        Q_values[0][action] = Y
-        QValue_model.fit(state, Q_values, verbose=0)
 
-        # Every C steps, update target model with QValue model weights
-        if update_steps == c_steps:
-            target_model.set_weights(QValue_model.get_weights())
-            update_steps = 0
+    states = np.empty([batch_size, observation_space])
+    actions = np.empty([batch_size, 1])
+    rewards = np.empty([batch_size, 1])
+    next_states = np.empty([batch_size, observation_space])
+    dones = np.empty([batch_size, 1])
+    for i in range(batch_size):
+        states[i] = minibatch[i][0]
+        actions[i] = minibatch[i][1]
+        rewards[i] = minibatch[i][2]
+        next_states[i] = minibatch[i][3]
+        dones[i] = minibatch[i][4]
+
+    predictions = target_model.predict(next_states)
+    max_predictions = np.amax(predictions, axis=1)
+    max_predictions = np.reshape(max_predictions, [batch_size, 1])
+    Y = (rewards + discount_factor * max_predictions)
+    Q_values = QValue_model.predict(states)
+
+    for i in range(batch_size):
+        if dones[i]:
+            Q_values[i][int(actions[i])] = rewards[i]
         else:
-            update_steps += 1
+            Q_values[i][int(actions[i])] = Y[i]
 
-    return update_steps
+    history = QValue_model.fit(states, Q_values, verbose=0)
+
+    # Every C steps, update target model with QValue model weights
+    if update_steps == c_steps:
+        target_model.set_weights(QValue_model.get_weights())
+        update_steps = 0
+    else:
+        update_steps += 1
+
+    return update_steps, history
 
 
 def deep_learning(env, num_episodes,
@@ -63,11 +84,13 @@ def deep_learning(env, num_episodes,
                   max_exploration=1,
                   discount_factor=0.95,
                   learning_rate=1e-3):
-
     # todo:  Add stats records
     # Initialization
     episode = 0
     update_steps = 0
+    score_sum = 0
+    stats = {'episode_loss': [],
+             'episode_rewards': np.zeros(num_episodes)}
     observation_space = env.observation_space.shape[0]
     action_space = env.action_space.n
     memory = deque(maxlen=max_memory)
@@ -104,9 +127,10 @@ def deep_learning(env, num_episodes,
             state = next_state
 
             if len(memory) >= batch_size:
-                update_steps = experience_replay(target_model, QValue_model, memory, batch_size, discount_factor, update_steps,
-                                                 c_steps)
-
+                update_steps, history = experience_replay(target_model, QValue_model, memory, batch_size,
+                                                          discount_factor, update_steps,
+                                                          c_steps, observation_space)
+                stats['episode_loss'].append(history.history['loss'])
                 # As the learning goes on alpha and epsilon should decayed to stabilize and exploit the learned policy.
 
                 # decay method 1
@@ -120,11 +144,15 @@ def deep_learning(env, num_episodes,
                                                                                                   episode)
 
             if done:
+                if episode > 100:
+                    score_sum -= stats['episode_rewards'][episode - 100]
+                score_sum += step
                 print(
                     "episode: " + str(episode) + ", exploration: " + str(exploration_rate) + ", score: " + str(
-                        step))
+                        step) + ", avg_score: " + str(score_sum / min(100, episode)))
+                stats['episode_rewards'][episode] = step
                 break
-    return target_model
+    return target_model, stats
 
 
 def main():
@@ -135,13 +163,17 @@ def main():
     random.seed(seed)
 
     num_episodes = 200
-    target_model = deep_learning(env, num_episodes, batch_size=16, c_steps=8, exploration_decay=0.05)
+    target_model, stats = deep_learning(env, num_episodes, batch_size=16, c_steps=4, exploration_decay=0.05)
 
     # colab save model
     # target_model.save(saved_models_path + 'target_model.h5')
+    # with open(saved_models_path + 'stats.pickle', 'wb') as f:
+    #     pickle.dump(stats, f)
 
     # local save model
     target_model.save('target_model.h5')
+    with open('stats.pickle', 'wb') as f:
+        pickle.dump(stats, f)
 
 
 if __name__ == '__main__':
