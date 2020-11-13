@@ -149,7 +149,7 @@ def deep_learning(env, num_episodes,
                 score_sum += step
                 print(
                     "episode: " + str(episode) + ", exploration: " + str(exploration_rate) + ", score: " + str(
-                        step) + ", avg_score: " + str(score_sum / min(100, episode)))
+                        step) + ", avg_score: " + "{:.2f}".format(score_sum / min(100, episode)))
                 stats['episode_rewards'][episode] = step
                 break
     return target_model, stats
