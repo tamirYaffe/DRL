@@ -90,7 +90,7 @@ def deep_learning(env, num_episodes,
     update_steps = 0
     score_sum = 0
     stats = {'episode_loss': [],
-             'episode_rewards': np.zeros(num_episodes)}
+             'episode_rewards': np.zeros(num_episodes + 1)}
     observation_space = env.observation_space.shape[0]
     action_space = env.action_space.n
     memory = deque(maxlen=max_memory)
@@ -148,7 +148,7 @@ def deep_learning(env, num_episodes,
                     score_sum -= stats['episode_rewards'][episode - 100]
                 score_sum += step
                 print(
-                    "episode: " + str(episode) + ", exploration: " + str(exploration_rate) + ", score: " + str(
+                    "episode: " + str(episode) + ", exploration: " + "{:.2f}".format(exploration_rate) + ", score: " + str(
                         step) + ", avg_score: " + "{:.2f}".format(score_sum / min(100, episode)))
                 stats['episode_rewards'][episode] = step
                 break
