@@ -84,7 +84,6 @@ def deep_learning(env, num_episodes,
                   max_exploration=1,
                   discount_factor=0.95,
                   learning_rate=1e-3):
-    # todo:  Add stats records
     # Initialization
     episode = 0
     update_steps = 0
@@ -119,7 +118,6 @@ def deep_learning(env, num_episodes,
             next_state = np.reshape(next_state, [1, observation_space])
             if not done:
                 reward = reward
-            # todo: check why reward is (-reward) if done?
             else:
                 reward = -reward
 
@@ -144,6 +142,7 @@ def deep_learning(env, num_episodes,
                                                                                                   episode)
 
             if done:
+                # target_model.set_weights(QValue_model.get_weights())
                 if episode > 100:
                     score_sum -= stats['episode_rewards'][episode - 100]
                 score_sum += step
@@ -151,8 +150,47 @@ def deep_learning(env, num_episodes,
                     "episode: " + str(episode) + ", exploration: " + "{:.2f}".format(exploration_rate) + ", score: " + str(
                         step) + ", avg_score: " + "{:.2f}".format(score_sum / min(100, episode)))
                 stats['episode_rewards'][episode] = step
+
+                # test model for early stopping
+                model_score = test_model(env, 100, QValue_model)
+                if model_score >= 475:
+                    return QValue_model, target_model, stats
                 break
-    return target_model, stats
+
+    return QValue_model, target_model, stats
+
+
+def test_model(env, num_episodes, model):
+    # Initialization
+    episode = 0
+    score_sum = 0
+    observation_space = env.observation_space.shape[0]
+
+    while episode < num_episodes:
+
+        episode += 1
+        state = env.reset()
+        state = np.reshape(state, [1, observation_space])
+        step = 0
+
+        while True:  # for each step of the episode
+
+            step += 1
+            # env.render()
+            actions = model.predict(state)
+            action = np.argmax(actions)
+
+            next_state, reward, done, info = env.step(action)
+            next_state = np.reshape(next_state, [1, observation_space])
+            state = next_state
+
+            if done:
+                score_sum += step
+                print(
+                    "episode: " + str(episode) + ", score: " + str(
+                        step) + ", avg_score: " + "{:.2f}".format(score_sum / min(100, episode)))
+                break
+    return score_sum / min(100, episode)
 
 
 def main():
@@ -163,15 +201,17 @@ def main():
     random.seed(seed)
 
     num_episodes = 200
-    target_model, stats = deep_learning(env, num_episodes, batch_size=16, c_steps=4, exploration_decay=0.05)
+    QValue_model, target_model, stats = deep_learning(env, num_episodes, batch_size=16, c_steps=4, exploration_decay=0.05)
 
     # colab save model
     # target_model.save(saved_models_path + 'target_model.h5')
+    # QValue_model.save(saved_models_path + 'QValue_model.h5')
     # with open(saved_models_path + 'stats.pickle', 'wb') as f:
     #     pickle.dump(stats, f)
 
     # local save model
     target_model.save('target_model.h5')
+    QValue_model.save('QValue_model.h5')
     with open('stats.pickle', 'wb') as f:
         pickle.dump(stats, f)
 
