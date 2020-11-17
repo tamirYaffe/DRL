@@ -152,9 +152,10 @@ def deep_learning(env, num_episodes,
                 stats['episode_rewards'][episode] = step
 
                 # test model for early stopping
-                model_score = test_model(env, 100, QValue_model)
-                if model_score >= 475:
-                    return QValue_model, target_model, stats
+                if step >= 400:
+                    model_score = test_model(env, 100, QValue_model)
+                    if model_score >= 475:
+                        return QValue_model, target_model, stats
                 break
 
     return QValue_model, target_model, stats
