@@ -1,7 +1,7 @@
 import random
-
 import gym
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 # Algorithm
@@ -19,6 +19,7 @@ import numpy as np
 #           target = R(s, a, s') + ymaxQk(s', a')
 #       Qk+1(s, a) = (1- 𝛼) * Qk(s, a) + 𝛼 * (target)
 #       s = s'
+from matplotlib.colors import ListedColormap
 
 
 def epsilonGreedyAction(q_table, epsilon, state):
@@ -60,6 +61,8 @@ def qLearning(env, num_episodes, discount_factor=0.99,
     action_space_size = env.action_space.n
     state_space_size = env.observation_space.n
     q_table = np.zeros((state_space_size, action_space_size))
+    start_q_table = []
+    middle_q_table = []
 
     # 3. Choose initial values for the hyper-parameters: learning rate 𝛼, discount
     #    factor 𝛾, decay rate for decaying epsilon-greedy probability.
@@ -106,6 +109,11 @@ def qLearning(env, num_episodes, discount_factor=0.99,
             if done and reward == 0:
                 stats['episode_lengths'][episode] = 100
 
+            # save q_tables
+            if episode == 500:
+                start_q_table = np.copy(q_table)
+            if episode == 2000:
+                middle_q_table = np.copy(q_table)
             # sample new initial state s'
             state = env.reset()
             step_count = 0
@@ -115,28 +123,40 @@ def qLearning(env, num_episodes, discount_factor=0.99,
             epsilon = min_epsilon + (max_epsilon - min_epsilon) * np.exp(-decay_rate * episode)
             alpha = min_alpha + (max_alpha - min_alpha) * np.exp(-decay_rate * episode)
 
-    return q_table, stats
+    return start_q_table, middle_q_table, q_table, stats
 
 
-def print_stats(num_episodes, q_table, stats):
+def plot_colormap(colormaps, data):
+    """
+    Helper function to plot data with associated colormap.
+    """
+    np.random.seed(19680801)
+    n = len(colormaps)
+    fig, axs = plt.subplots(1, n, figsize=(n * 2 + 2, 3),
+                            constrained_layout=False, squeeze=False)
+    for [ax, cmap] in zip(axs.flat, colormaps):
+        psm = ax.pcolormesh(data, cmap=cmap, rasterized=True, vmin=data.min(), vmax=data.max())
+        fig.colorbar(psm, ax=ax)
+    plt.show()
+
+
+def plot_results(middle_q_table, num_episodes, q_table, start_q_table, stats):
     length_per_hundred_episodes = np.split(stats['episode_lengths'], num_episodes / 100)
     count = 100
-    print("********Average length per hundred episodes********\n")
+    length_sum_per_hundred_episodes = []
     for length in length_per_hundred_episodes:
-        print(count, ": ", str(sum(length / 100)))
+        length_sum_per_hundred_episodes.append(sum(length / 100))
+        # print(count, ": ", str(sum(length / 100)))
         count += 100
-
-    # Calculate and print the average reward per thousand episodes
-    rewards_per_thousand_episodes = np.split(stats['episode_rewards'], num_episodes / 1000)
-    count = 1000
-
-    print("********Average reward per thousand episodes********\n")
-    for r in rewards_per_thousand_episodes:
-        print(count, ": ", str(sum(r / 1000)))
-        count += 1000
-
-    print("\n\n********Q-table********\n")
-    print(q_table)
+    plt.plot(length_sum_per_hundred_episodes)
+    plt.title('average number of steps to the goal over last 100')
+    plt.ylabel('average length')
+    plt.xlabel('hundredth episodes')
+    plt.show()
+    cmap = ListedColormap(["khaki", "gold", "orange", "darkorange", "orangered", "red", "firebrick"])
+    plot_colormap([cmap], start_q_table)
+    plot_colormap([cmap], middle_q_table)
+    plot_colormap([cmap], q_table)
 
 
 def main():
@@ -147,9 +167,9 @@ def main():
     random.seed(seed)
 
     num_episodes = 5000
-    q_table, stats = qLearning(env, num_episodes)
+    start_q_table, middle_q_table, q_table, stats = qLearning(env, num_episodes)
 
-    print_stats(num_episodes, q_table, stats)
+    plot_results(middle_q_table, num_episodes, q_table, start_q_table, stats)
 
 
 if __name__ == '__main__':

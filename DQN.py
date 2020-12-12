@@ -4,14 +4,43 @@ import random
 from collections import deque
 import gym
 import numpy as np
-from keras import Sequential
-from keras.layers import Dense
+from keras import Input, Sequential, Model
+from keras.layers import Dense, Lambda, Activation
 from keras.optimizers import Adam
+from keras import backend as K
+import matplotlib.pyplot as plt
 
 # for colab
 path_separator = os.path.sep
 drive_path = '/content/drive/My Drive/colab_DRL/'
 saved_models_path = drive_path + "models" + path_separator
+
+
+def get_dueling_deep_model(observation_space, action_space, learning_rate):
+    input_layer = Input(observation_space)
+
+    features = Dense(64, activation='relu')(input_layer)
+    features = Dense(32, activation='relu')(features)
+
+    values = Dense(16, activation='relu')(features)
+    values = Dense(1)(values)
+
+    advantages = Dense(16, activation='relu')(features)
+    advantages = Dense(action_space)(advantages)
+
+    # Add a customized layer to compute the absolute difference between the encodings
+    aggregation_layer = Lambda(lambda tensors: tensors[0] + tensors[1] - K.mean(tensors[1]))
+    aggregation = aggregation_layer([values, advantages])
+    aggregation = Activation('linear')(aggregation)
+
+    # Add a dense layer with a sigmoid unit to generate the similarity score
+    prediction = Dense(action_space, activation='linear')(aggregation)
+
+    # Connect the inputs with the outputs
+    model = Model(inputs=input_layer, outputs=prediction)
+    model.compile(loss='mse', optimizer=Adam(lr=learning_rate))
+
+    return model
 
 
 def get_deep_model(observation_space, action_space, learning_rate):
@@ -35,7 +64,7 @@ def epsilonGreedyAction(state, exploration_rate, model):
 
 
 def experience_replay(target_model, QValue_model, memory, batch_size, discount_factor, update_steps, c_steps,
-                      observation_space):
+                      observation_space, is_DDQN=False):
     minibatch = random.sample(memory, batch_size)
 
     states = np.empty([batch_size, observation_space])
@@ -50,9 +79,19 @@ def experience_replay(target_model, QValue_model, memory, batch_size, discount_f
         next_states[i] = minibatch[i][3]
         dones[i] = minibatch[i][4]
 
-    predictions = target_model.predict(next_states)
-    max_predictions = np.amax(predictions, axis=1)
-    max_predictions = np.reshape(max_predictions, [batch_size, 1])
+    if not is_DDQN:
+        predictions = target_model.predict(next_states)
+        max_predictions = np.amax(predictions, axis=1)
+        max_predictions = np.reshape(max_predictions, [batch_size, 1])
+
+    else:
+        # DDQN improvement
+        target_predictions = target_model.predict(next_states)
+        Qvalue_predictions = QValue_model.predict(next_states)
+        Qvalue_max_predictions_indecies = np.argmax(Qvalue_predictions, axis=1)
+        target_max_value_predictions = target_predictions[np.arange(len(target_predictions)), Qvalue_max_predictions_indecies]
+        max_predictions = np.reshape(target_max_value_predictions, [batch_size, 1])
+
     Y = (rewards + discount_factor * max_predictions)
     Q_values = QValue_model.predict(states)
 
@@ -89,7 +128,7 @@ def deep_learning(env, num_episodes,
     update_steps = 0
     score_sum = 0
     stats = {'episode_loss': [],
-             'episode_rewards': np.zeros(num_episodes + 1)}
+             'episode_rewards': []}
     observation_space = env.observation_space.shape[0]
     action_space = env.action_space.n
     memory = deque(maxlen=max_memory)
@@ -97,10 +136,12 @@ def deep_learning(env, num_episodes,
     # We separate the network into two different networks:
 
     # One for computing the targets (using an older set of parameters 𝜃-)
-    target_model = get_deep_model(observation_space, action_space, learning_rate)
+    # target_model = get_deep_model(observation_space, action_space, learning_rate)
+    target_model = get_dueling_deep_model(observation_space, action_space, learning_rate)
 
     # One for predicting the q-value which is being updated every minibatch optimization (using parameters 𝜃)
-    QValue_model = get_deep_model(observation_space, action_space, learning_rate)
+    # QValue_model = get_deep_model(observation_space, action_space, learning_rate)
+    QValue_model = get_dueling_deep_model(observation_space, action_space, learning_rate)
 
     while episode < num_episodes:
 
@@ -149,7 +190,7 @@ def deep_learning(env, num_episodes,
                 print(
                     "episode: " + str(episode) + ", exploration: " + "{:.2f}".format(exploration_rate) + ", score: " + str(
                         step) + ", avg_score: " + "{:.2f}".format(score_sum / min(100, episode)))
-                stats['episode_rewards'][episode] = step
+                stats['episode_rewards'].append(step)
 
                 # test model for early stopping
                 if step >= 400:
@@ -217,5 +258,25 @@ def main():
         pickle.dump(stats, f)
 
 
+def plot_stats():
+    # read pickle file
+    with open('stats.pickle', 'rb') as f:
+        stats = pickle.load(f)
+
+    plt.plot(stats['episode_loss'])
+    plt.title('training steps loss')
+    plt.ylabel('loss')
+    plt.xlabel('step')
+    plt.show()
+
+    stats['episode_rewards'] = stats['episode_rewards'][:61]
+    plt.plot(stats['episode_rewards'])
+    plt.title('episode rewards')
+    plt.ylabel('reward')
+    plt.xlabel('episode')
+    plt.show()
+
+
 if __name__ == '__main__':
-    main()
+    # main()
+    plot_stats()
