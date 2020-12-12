@@ -10,10 +10,10 @@ env = gym.make('CartPole-v1')
 np.random.seed(1)
 # Rt is calculated as rewards and discount factor
 
+
 class StateValueNetwork:
-    def __init__(self, state_size, action_size, learning_rate, name='policy_network'):
+    def __init__(self, state_size, learning_rate, name='state_value_network'):
         self.state_size = state_size
-        self.action_size = action_size
         self.learning_rate = learning_rate
 
         with tf.compat.v1.variable_scope(name):
@@ -81,13 +81,15 @@ render = False
 # Initialize the policy network
 tf.compat.v1.reset_default_graph()
 policy = PolicyNetwork(state_size, action_size, learning_rate)
+state_value_network = StateValueNetwork(state_size, learning_rate)
 
 
 # Start training the agent with REINFORCE algorithm
 with tf.compat.v1.Session() as sess:
     sess.run(tf.compat.v1.global_variables_initializer())
     solved = False
-    Transition = collections.namedtuple("Transition", ["state", "action", "reward", "next_state", "done"])
+    Transition = collections.namedtuple("Transition", ["state", "action", "reward", "next_state",
+                                                       "next_state_value_approx", "done"])
     episode_rewards = np.zeros(max_episodes)
     average_rewards = 0.0
 
@@ -97,17 +99,23 @@ with tf.compat.v1.Session() as sess:
         episode_transitions = []
 
         for step in range(max_steps):
+
             actions_distribution = sess.run(policy.actions_distribution, {policy.state: state})
             action = np.random.choice(np.arange(len(actions_distribution)), p=actions_distribution)
             next_state, reward, done, _ = env.step(action)
             next_state = next_state.reshape([1, state_size])
+
+            # calculate approx_value = b(St)
+            next_state_value_approx = sess.run(state_value_network.state_value, {state_value_network.state: next_state})
 
             if render:
                 env.render()
 
             action_one_hot = np.zeros(action_size)
             action_one_hot[action] = 1
-            episode_transitions.append(Transition(state=state, action=action_one_hot, reward=reward, next_state=next_state, done=done))
+            episode_transitions.append(Transition(state=state, action=action_one_hot, reward=reward,
+                                                  next_state=next_state,
+                                                  next_state_value_approx=next_state_value_approx, done=done))
             episode_rewards[episode] += reward
 
             if done:
@@ -126,8 +134,16 @@ with tf.compat.v1.Session() as sess:
 
         # Compute Rt for each time-step t and update the network's weights
         for t, transition in enumerate(episode_transitions):
-            total_discounted_return = sum(discount_factor ** i * t.reward for i, t in enumerate(episode_transitions[t:])) # Rt
-            # todo: calculate approx_value = b(St)
-            # todo: calaulate Rt -b(St)
-            feed_dict = {policy.state: transition.state, policy.R_t: total_discounted_return, policy.action: transition.action}
-            _, loss = sess.run([policy.optimizer, policy.loss], feed_dict)
+            total_discounted_return = sum(discount_factor ** i * t.reward for i, t in
+                                          enumerate(episode_transitions[t:]))  # Rt
+
+            next_state_value_approx = transition.next_state_value_approx  # b(st)
+            # calculate advantage =  Rt - b(St)
+            advantage = total_discounted_return - next_state_value_approx
+
+            actor_feed_dict = {policy.state: transition.state, policy.R_t: advantage,
+                         policy.action: transition.action}
+            _, actor_loss = sess.run([policy.optimizer, policy.loss], actor_feed_dict)
+
+            baseline_feed_dict = {state_value_network.state: transition.next_state, state_value_network.R_t: total_discounted_return}
+            _, baseline_loss = sess.run([state_value_network.optimizer, state_value_network.loss], baseline_feed_dict)
