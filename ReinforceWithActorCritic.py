@@ -89,7 +89,7 @@ with tf.compat.v1.Session() as sess:
     sess.run(tf.compat.v1.global_variables_initializer())
     solved = False
     Transition = collections.namedtuple("Transition", ["state", "action", "reward", "next_state",
-                                                       "next_state_value_approx", "done"])
+                                                       "state_value_approx", "done"])
     episode_rewards = np.zeros(max_episodes)
     average_rewards = 0.0
 
@@ -106,7 +106,7 @@ with tf.compat.v1.Session() as sess:
             next_state = next_state.reshape([1, state_size])
 
             # calculate approx_value = b(St)
-            next_state_value_approx = sess.run(state_value_network.state_value, {state_value_network.state: state})
+            state_value_approx = sess.run(state_value_network.state_value, {state_value_network.state: state})
 
             if render:
                 env.render()
@@ -115,7 +115,7 @@ with tf.compat.v1.Session() as sess:
             action_one_hot[action] = 1
             episode_transitions.append(Transition(state=state, action=action_one_hot, reward=reward,
                                                   next_state=next_state,
-                                                  next_state_value_approx=next_state_value_approx, done=done))
+                                                  state_value_approx=state_value_approx, done=done))
             episode_rewards[episode] += reward
 
             if done:
@@ -137,9 +137,9 @@ with tf.compat.v1.Session() as sess:
             total_discounted_return = sum(discount_factor ** i * t.reward for i, t in
                                           enumerate(episode_transitions[t:]))  # Rt
 
-            next_state_value_approx = transition.next_state_value_approx  # b(st)
+            state_value_approx = transition.state_value_approx  # b(st)
             # calculate advantage =  Rt - b(St)
-            advantage = total_discounted_return - next_state_value_approx
+            advantage = total_discounted_return - state_value_approx
 
             actor_feed_dict = {policy.state: transition.state, policy.R_t: advantage,
                          policy.action: transition.action}
