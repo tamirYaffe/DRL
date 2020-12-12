@@ -8,7 +8,7 @@ tf.compat.v1.disable_eager_execution()
 env = gym.make('CartPole-v1')
 
 np.random.seed(1)
-
+# Rt is calculated as rewards and discount factor
 
 class StateValueNetwork:
     def __init__(self, state_size, action_size, learning_rate, name='policy_network'):
@@ -19,23 +19,22 @@ class StateValueNetwork:
         with tf.compat.v1.variable_scope(name):
 
             self.state = tf.compat.v1.placeholder(tf.float32, [None, self.state_size], name="state")
-            self.action = tf.compat.v1.placeholder(tf.int32, [self.action_size], name="action")
+            self.value = tf.compat.v1.placeholder(tf.int32, 1, name="value")
             self.R_t = tf.compat.v1.placeholder(tf.float32, name="total_rewards")
 
             self.W1 = tf.compat.v1.get_variable("W1", [self.state_size, 12], initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg", distribution="uniform", seed=0))
             self.b1 = tf.compat.v1.get_variable("b1", [12], initializer=tf.compat.v1.zeros_initializer())
-            self.W2 = tf.compat.v1.get_variable("W2", [12, self.action_size], initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg", distribution="uniform", seed=0))
-            self.b2 = tf.compat.v1.get_variable("b2", [self.action_size], initializer=tf.compat.v1.zeros_initializer())
+            self.W2 = tf.compat.v1.get_variable("W2", [12, 1], initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg", distribution="uniform", seed=0))
+            self.b2 = tf.compat.v1.get_variable("b2", [1], initializer=tf.compat.v1.zeros_initializer())
 
             self.Z1 = tf.add(tf.matmul(self.state, self.W1), self.b1)
             self.A1 = tf.nn.relu(self.Z1)
             self.output = tf.add(tf.matmul(self.A1, self.W2), self.b2)
 
-            # Softmax probability distribution over actions
-            self.actions_distribution = tf.squeeze(tf.nn.softmax(self.output))
-            # Loss with negative log probability
-            self.neg_log_prob = tf.nn.softmax_cross_entropy_with_logits(logits=self.output, labels=self.action)
-            self.loss = tf.reduce_mean(input_tensor=self.neg_log_prob * self.R_t)
+            # state value estimation
+            self.state_value = tf.squeeze(self.output)
+            # Loss
+            self.loss = tf.reduce_mean(tf.math.squared_difference(self.state_value, self.R_t))
             self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.loss)
 
 
@@ -128,5 +127,7 @@ with tf.compat.v1.Session() as sess:
         # Compute Rt for each time-step t and update the network's weights
         for t, transition in enumerate(episode_transitions):
             total_discounted_return = sum(discount_factor ** i * t.reward for i, t in enumerate(episode_transitions[t:])) # Rt
+            # todo: calculate approx_value = b(St)
+            # todo: calaulate Rt -b(St)
             feed_dict = {policy.state: transition.state, policy.R_t: total_discounted_return, policy.action: transition.action}
             _, loss = sess.run([policy.optimizer, policy.loss], feed_dict)
