@@ -106,7 +106,7 @@ with tf.compat.v1.Session() as sess:
             next_state = next_state.reshape([1, state_size])
 
             # calculate approx_value = b(St)
-            next_state_value_approx = sess.run(state_value_network.state_value, {state_value_network.state: next_state})
+            next_state_value_approx = sess.run(state_value_network.state_value, {state_value_network.state: state})
 
             if render:
                 env.render()
@@ -145,5 +145,5 @@ with tf.compat.v1.Session() as sess:
                          policy.action: transition.action}
             _, actor_loss = sess.run([policy.optimizer, policy.loss], actor_feed_dict)
 
-            baseline_feed_dict = {state_value_network.state: transition.next_state, state_value_network.R_t: total_discounted_return}
+            baseline_feed_dict = {state_value_network.state: transition.state, state_value_network.R_t: total_discounted_return}
             _, baseline_loss = sess.run([state_value_network.optimizer, state_value_network.loss], baseline_feed_dict)
