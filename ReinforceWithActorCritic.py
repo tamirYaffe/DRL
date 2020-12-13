@@ -8,6 +8,8 @@ tf.compat.v1.disable_eager_execution()
 env = gym.make('CartPole-v1')
 
 np.random.seed(1)
+
+
 # Rt is calculated as rewards and discount factor
 
 
@@ -17,14 +19,21 @@ class StateValueNetwork:
         self.learning_rate = learning_rate
 
         with tf.compat.v1.variable_scope(name):
-
             self.state = tf.compat.v1.placeholder(tf.float32, [None, self.state_size], name="state")
             self.value = tf.compat.v1.placeholder(tf.int32, 1, name="value")
             self.R_t = tf.compat.v1.placeholder(tf.float32, name="total_rewards")
 
-            self.W1 = tf.compat.v1.get_variable("W1", [self.state_size, 12], initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg", distribution="uniform", seed=0))
+            self.W1 = tf.compat.v1.get_variable("W1", [self.state_size, 12],
+                                                initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
+                                                                                                            mode="fan_avg",
+                                                                                                            distribution="uniform",
+                                                                                                            seed=0))
             self.b1 = tf.compat.v1.get_variable("b1", [12], initializer=tf.compat.v1.zeros_initializer())
-            self.W2 = tf.compat.v1.get_variable("W2", [12, 1], initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg", distribution="uniform", seed=0))
+            self.W2 = tf.compat.v1.get_variable("W2", [12, 1],
+                                                initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
+                                                                                                            mode="fan_avg",
+                                                                                                            distribution="uniform",
+                                                                                                            seed=0))
             self.b2 = tf.compat.v1.get_variable("b2", [1], initializer=tf.compat.v1.zeros_initializer())
 
             self.Z1 = tf.add(tf.matmul(self.state, self.W1), self.b1)
@@ -45,14 +54,21 @@ class PolicyNetwork:
         self.learning_rate = learning_rate
 
         with tf.compat.v1.variable_scope(name):
-
             self.state = tf.compat.v1.placeholder(tf.float32, [None, self.state_size], name="state")
             self.action = tf.compat.v1.placeholder(tf.int32, [self.action_size], name="action")
             self.R_t = tf.compat.v1.placeholder(tf.float32, name="total_rewards")
 
-            self.W1 = tf.compat.v1.get_variable("W1", [self.state_size, 12], initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg", distribution="uniform", seed=0))
+            self.W1 = tf.compat.v1.get_variable("W1", [self.state_size, 12],
+                                                initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
+                                                                                                            mode="fan_avg",
+                                                                                                            distribution="uniform",
+                                                                                                            seed=0))
             self.b1 = tf.compat.v1.get_variable("b1", [12], initializer=tf.compat.v1.zeros_initializer())
-            self.W2 = tf.compat.v1.get_variable("W2", [12, self.action_size], initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg", distribution="uniform", seed=0))
+            self.W2 = tf.compat.v1.get_variable("W2", [12, self.action_size],
+                                                initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
+                                                                                                            mode="fan_avg",
+                                                                                                            distribution="uniform",
+                                                                                                            seed=0))
             self.b2 = tf.compat.v1.get_variable("b2", [self.action_size], initializer=tf.compat.v1.zeros_initializer())
 
             self.Z1 = tf.add(tf.matmul(self.state, self.W1), self.b1)
@@ -76,6 +92,7 @@ max_steps = 501
 discount_factor = 0.99
 learning_rate = 0.0004
 
+n_step = 100
 render = False
 
 # Initialize the policy network
@@ -83,13 +100,14 @@ tf.compat.v1.reset_default_graph()
 policy = PolicyNetwork(state_size, action_size, learning_rate)
 state_value_network = StateValueNetwork(state_size, learning_rate)
 
-
 # Start training the agent with REINFORCE algorithm
 with tf.compat.v1.Session() as sess:
     sess.run(tf.compat.v1.global_variables_initializer())
     solved = False
     Transition = collections.namedtuple("Transition", ["state", "action", "reward", "next_state",
-                                                       "state_value_approx", "done"])
+                                                       "state_value_approx",
+                                                       "next_state_value_approx",
+                                                       "done"])
     episode_rewards = np.zeros(max_episodes)
     average_rewards = 0.0
 
@@ -108,6 +126,13 @@ with tf.compat.v1.Session() as sess:
             # calculate approx_value = b(St)
             state_value_approx = sess.run(state_value_network.state_value, {state_value_network.state: state})
 
+            # calculate approx_value = b(S't)
+            if done:
+                next_state_value_approx = 0
+            else:
+                next_state_value_approx = sess.run(state_value_network.state_value,
+                                                   {state_value_network.state: next_state})
+
             if render:
                 env.render()
 
@@ -115,14 +140,16 @@ with tf.compat.v1.Session() as sess:
             action_one_hot[action] = 1
             episode_transitions.append(Transition(state=state, action=action_one_hot, reward=reward,
                                                   next_state=next_state,
-                                                  state_value_approx=state_value_approx, done=done))
+                                                  state_value_approx=state_value_approx,
+                                                  next_state_value_approx=next_state_value_approx, done=done))
             episode_rewards[episode] += reward
 
             if done:
                 if episode > 98:
                     # Check if solved
-                    average_rewards = np.mean(episode_rewards[(episode - 99):episode+1])
-                print("Episode {} Reward: {} Average over 100 episodes: {}".format(episode, episode_rewards[episode], round(average_rewards, 2)))
+                    average_rewards = np.mean(episode_rewards[(episode - 99):episode + 1])
+                print("Episode {} Reward: {} Average over 100 episodes: {}".format(episode, episode_rewards[episode],
+                                                                                   round(average_rewards, 2)))
                 if average_rewards > 475:
                     print(' Solved at episode: ' + str(episode))
                     solved = True
@@ -134,16 +161,33 @@ with tf.compat.v1.Session() as sess:
 
         # Compute Rt for each time-step t and update the network's weights
         for t, transition in enumerate(episode_transitions):
+            # total_discounted_return = sum(discount_factor ** i * t.reward for i, t in
+            #                               enumerate(episode_transitions[t:]))  # Rt
+
+            # total_approx_discounted_return = transition.reward + sum(discount_factor ** (i+1)
+            #                                                          * t.next_state_value_approx for i, t in
+            #                                                          enumerate(episode_transitions[t:]))
+
             total_discounted_return = sum(discount_factor ** i * t.reward for i, t in
-                                          enumerate(episode_transitions[t:]))  # Rt
+                                          enumerate(episode_transitions[t:t + n_step-1] if t + n_step-1 < len(episode_transitions)
+                                                    else episode_transitions[t:]))  # Rt
+
+            if t + n_step-1 < len(episode_transitions):
+                total_approx_discounted_return = discount_factor ** n_step *\
+                                                 episode_transitions[t + n_step-1].next_state_value_approx
+                total_discounted_return += total_approx_discounted_return
+
+            # total_approx_discounted_return = transition.reward + discount_factor * transition.next_state_value_approx
 
             state_value_approx = transition.state_value_approx  # b(st)
-            # calculate advantage =  Rt - b(St)
+
             advantage = total_discounted_return - state_value_approx
 
             actor_feed_dict = {policy.state: transition.state, policy.R_t: advantage,
-                         policy.action: transition.action}
+                               policy.action: transition.action}
             _, actor_loss = sess.run([policy.optimizer, policy.loss], actor_feed_dict)
 
-            baseline_feed_dict = {state_value_network.state: transition.state, state_value_network.R_t: total_discounted_return}
-            _, baseline_loss = sess.run([state_value_network.optimizer, state_value_network.loss], baseline_feed_dict)
+            baseline_feed_dict = {state_value_network.state: transition.state,
+                                  state_value_network.R_t: total_discounted_return}
+            _, baseline_loss = sess.run([state_value_network.optimizer, state_value_network.loss],
+                                        baseline_feed_dict)
