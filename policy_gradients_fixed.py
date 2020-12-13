@@ -1,3 +1,6 @@
+import time
+import matplotlib.pyplot as plt
+
 import gym
 import numpy as np
 import tensorflow as tf
@@ -8,6 +11,14 @@ tf.compat.v1.disable_eager_execution()
 env = gym.make('CartPole-v1')
 
 np.random.seed(1)
+
+
+def plot_history(history):
+    plt.plot(history)
+    plt.title('episode rewards')
+    plt.ylabel('reward')
+    plt.xlabel('episode')
+    plt.show()
 
 
 class PolicyNetwork:
@@ -63,6 +74,9 @@ with tf.compat.v1.Session() as sess:
     episode_rewards = np.zeros(max_episodes)
     average_rewards = 0.0
 
+    start_time = time.time()
+    history = []
+
     for episode in range(max_episodes):
         state = env.reset()
         state = state.reshape([1, state_size])
@@ -86,6 +100,8 @@ with tf.compat.v1.Session() as sess:
                 if episode > 98:
                     # Check if solved
                     average_rewards = np.mean(episode_rewards[(episode - 99):episode+1])
+                history.append(average_rewards)
+
                 print("Episode {} Reward: {} Average over 100 episodes: {}".format(episode, episode_rewards[episode], round(average_rewards, 2)))
                 if average_rewards > 475:
                     print(' Solved at episode: ' + str(episode))
@@ -101,3 +117,7 @@ with tf.compat.v1.Session() as sess:
             total_discounted_return = sum(discount_factor ** i * t.reward for i, t in enumerate(episode_transitions[t:])) # Rt
             feed_dict = {policy.state: transition.state, policy.R_t: total_discounted_return, policy.action: transition.action}
             _, loss = sess.run([policy.optimizer, policy.loss], feed_dict)
+
+end_time = time.time()
+print("total time to converge: {}".format(end_time - start_time))
+plot_history(history)
