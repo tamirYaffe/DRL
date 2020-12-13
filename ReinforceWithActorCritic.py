@@ -92,7 +92,7 @@ max_steps = 501
 discount_factor = 0.99
 learning_rate = 0.0004
 
-n_step = 50
+n_step = 100
 render = False
 
 # Initialize the policy network
@@ -143,7 +143,6 @@ with tf.compat.v1.Session() as sess:
                                                   state_value_approx=state_value_approx,
                                                   next_state_value_approx=next_state_value_approx, done=done))
             episode_rewards[episode] += reward
-
 
             if done:
                 if episode > 98:
