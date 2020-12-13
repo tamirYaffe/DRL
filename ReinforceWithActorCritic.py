@@ -92,6 +92,7 @@ max_steps = 501
 discount_factor = 0.99
 learning_rate = 0.0004
 
+n_step = 50
 render = False
 
 # Initialize the policy network
@@ -103,8 +104,10 @@ state_value_network = StateValueNetwork(state_size, learning_rate)
 with tf.compat.v1.Session() as sess:
     sess.run(tf.compat.v1.global_variables_initializer())
     solved = False
-    # Transition = collections.namedtuple("Transition", ["state", "action", "reward", "next_state",
-    #                                                    "state_value_approx", "done"])
+    Transition = collections.namedtuple("Transition", ["state", "action", "reward", "next_state",
+                                                       "state_value_approx",
+                                                       "next_state_value_approx",
+                                                       "done"])
     episode_rewards = np.zeros(max_episodes)
     average_rewards = 0.0
 
@@ -135,23 +138,12 @@ with tf.compat.v1.Session() as sess:
 
             action_one_hot = np.zeros(action_size)
             action_one_hot[action] = 1
-            # episode_transitions.append(Transition(state=state, action=action_one_hot, reward=reward,
-            #                                       next_state=next_state,
-            #                                       state_value_approx=state_value_approx, done=done))
+            episode_transitions.append(Transition(state=state, action=action_one_hot, reward=reward,
+                                                  next_state=next_state,
+                                                  state_value_approx=state_value_approx,
+                                                  next_state_value_approx=next_state_value_approx, done=done))
             episode_rewards[episode] += reward
 
-            # update the network's weights
-            discounted_return = reward + discount_factor * next_state_value_approx
-            # calculate advantage =  Rt - b(St)
-            advantage = discounted_return - state_value_approx
-
-            actor_feed_dict = {policy.state: state, policy.R_t: advantage,
-                               policy.action: action_one_hot}
-            _, actor_loss = sess.run([policy.optimizer, policy.loss], actor_feed_dict)
-
-            baseline_feed_dict = {state_value_network.state: state,
-                                  state_value_network.R_t: discounted_return}
-            _, baseline_loss = sess.run([state_value_network.optimizer, state_value_network.loss], baseline_feed_dict)
 
             if done:
                 if episode > 98:
@@ -167,3 +159,36 @@ with tf.compat.v1.Session() as sess:
 
         if solved:
             break
+
+        # Compute Rt for each time-step t and update the network's weights
+        for t, transition in enumerate(episode_transitions):
+            # total_discounted_return = sum(discount_factor ** i * t.reward for i, t in
+            #                               enumerate(episode_transitions[t:]))  # Rt
+
+            # total_approx_discounted_return = transition.reward + sum(discount_factor ** (i+1)
+            #                                                          * t.next_state_value_approx for i, t in
+            #                                                          enumerate(episode_transitions[t:]))
+
+            total_discounted_return = sum(discount_factor ** i * t.reward for i, t in
+                                          enumerate(episode_transitions[t:t + n_step-1] if t + n_step-1 < len(episode_transitions)
+                                                    else episode_transitions[t:]))  # Rt
+
+            if t + n_step-1 < len(episode_transitions):
+                total_approx_discounted_return = discount_factor ** n_step *\
+                                                 episode_transitions[t + n_step-1].next_state_value_approx
+                total_discounted_return += total_approx_discounted_return
+
+            # total_approx_discounted_return = transition.reward + discount_factor * transition.next_state_value_approx
+
+            state_value_approx = transition.state_value_approx  # b(st)
+
+            advantage = total_discounted_return - state_value_approx
+
+            actor_feed_dict = {policy.state: transition.state, policy.R_t: advantage,
+                               policy.action: transition.action}
+            _, actor_loss = sess.run([policy.optimizer, policy.loss], actor_feed_dict)
+
+            baseline_feed_dict = {state_value_network.state: transition.state,
+                                  state_value_network.R_t: total_discounted_return}
+            _, baseline_loss = sess.run([state_value_network.optimizer, state_value_network.loss],
+                                        baseline_feed_dict)
