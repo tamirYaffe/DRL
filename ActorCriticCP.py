@@ -95,8 +95,8 @@ class PolicyNetwork:
 
 
 # Define hyperparameters
-state_size = 4
-action_size = env.action_space.n
+global_state_size = 6
+global_action_size = 3
 
 max_episodes = 5000
 max_steps = 501
@@ -108,8 +108,36 @@ render = False
 
 # Initialize the policy network
 tf.compat.v1.reset_default_graph()
-policy = PolicyNetwork(state_size, action_size, learning_rate)
-state_value_network = StateValueNetwork(state_size, learning_rate)
+policy = PolicyNetwork(global_state_size, global_action_size, learning_rate)
+state_value_network = StateValueNetwork(global_state_size, learning_rate)
+
+
+def pad_state(state_to_pad):
+    state_to_pad_size = len(state_to_pad)
+
+    if state_to_pad_size == env.action_space.n:
+        return state_to_pad
+
+    padded_state = np.zeros(global_state_size)
+    for i in range(state_to_pad_size):
+        padded_state[i] = state_to_pad[i]
+
+    return padded_state
+
+
+def remove_actions_padding(actions):
+    if len(actions) == env.action_space.n:
+        return actions
+
+    actions = actions[:env.action_space.n]
+    # normalize remaining probabilities to 1.
+    sum_of_probabilities = np.sum(actions)
+    if sum_of_probabilities <= 0:
+      actions = [0.5, 0.5]
+    else:
+      actions = actions / sum_of_probabilities
+
+    return actions
 
 # Start training the agent with REINFORCE algorithm
 with tf.compat.v1.Session() as sess:
@@ -126,15 +154,28 @@ with tf.compat.v1.Session() as sess:
 
     for episode in range(max_episodes):
         state = env.reset()
-        state = state.reshape([1, state_size])
+
+        # pad state to size of global state size.
+        state = pad_state(state)
+
+        state = state.reshape([1, global_state_size])
         episode_transitions = []
 
         for step in range(max_steps):
 
             actions_distribution = sess.run(policy.actions_distribution, {policy.state: state})
+
+            # remove padding from actions
+            # actions_distribution = remove_actions_padding(actions_distribution)
+
             action = np.random.choice(np.arange(len(actions_distribution)), p=actions_distribution)
-            next_state, reward, done, _ = env.step(action)
-            next_state = next_state.reshape([1, state_size])
+            if action >= env.action_space.n:
+                next_state, reward, done = state, 0, True
+            else:
+                next_state, reward, done, _ = env.step(action)
+                # pad next state to size of global state size.
+                next_state = pad_state(next_state)
+                next_state = next_state.reshape([1, global_state_size])
 
             # calculate approx_value = b(St)
             state_value_approx = sess.run(state_value_network.state_value, {state_value_network.state: state})
@@ -149,7 +190,7 @@ with tf.compat.v1.Session() as sess:
             if render:
                 env.render()
 
-            action_one_hot = np.zeros(action_size)
+            action_one_hot = np.zeros(global_action_size)
             action_one_hot[action] = 1
             episode_transitions.append(Transition(state=state, action=action_one_hot, reward=reward,
                                                   next_state=next_state,
@@ -202,10 +243,10 @@ with tf.compat.v1.Session() as sess:
                                policy.action: transition.action}
             _, actor_loss = sess.run([policy.optimizer, policy.loss], actor_feed_dict)
 
-            baseline_feed_dict = {state_value_network.state: transition.state,
-                                  state_value_network.R_t: total_discounted_return}
-            _, baseline_loss = sess.run([state_value_network.optimizer, state_value_network.loss],
-                                        baseline_feed_dict)
+            critic_feed_dict = {state_value_network.state: transition.state,
+                                state_value_network.R_t: total_discounted_return}
+            _, critic_loss = sess.run([state_value_network.optimizer, state_value_network.loss],
+                                      critic_feed_dict)
 end_time = time.time()
 print("total time to converge: {}".format(end_time - start_time))
 plot_history(history)
