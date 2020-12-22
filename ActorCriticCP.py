@@ -9,6 +9,8 @@ import collections
 tf.compat.v1.disable_eager_execution()
 
 env = gym.make('CartPole-v1')
+env_state_size = 4
+env_action_size = 2
 
 np.random.seed(1)
 
@@ -115,7 +117,7 @@ state_value_network = StateValueNetwork(global_state_size, learning_rate)
 def pad_state(state_to_pad):
     state_to_pad_size = len(state_to_pad)
 
-    if state_to_pad_size == env.action_space.n:
+    if state_to_pad_size == global_state_size:
         return state_to_pad
 
     padded_state = np.zeros(global_state_size)
@@ -126,10 +128,10 @@ def pad_state(state_to_pad):
 
 
 def remove_actions_padding(actions):
-    if len(actions) == env.action_space.n:
+    if len(actions) == env_action_size:
         return actions
 
-    actions = actions[:env.action_space.n]
+    actions = actions[:env_action_size]
     # normalize remaining probabilities to 1.
     sum_of_probabilities = np.sum(actions)
     if sum_of_probabilities <= 0:
@@ -169,7 +171,7 @@ with tf.compat.v1.Session() as sess:
             # actions_distribution = remove_actions_padding(actions_distribution)
 
             action = np.random.choice(np.arange(len(actions_distribution)), p=actions_distribution)
-            if action >= env.action_space.n:
+            if action >= env_action_size:
                 next_state, reward, done = state, 0, True
             else:
                 next_state, reward, done, _ = env.step(action)
