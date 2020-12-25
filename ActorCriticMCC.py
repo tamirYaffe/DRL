@@ -15,7 +15,8 @@ env = gym.make('MountainCarContinuous-v0')
 # Observation range, dimension 1: (-0.070 to 0.070)
 env_state_size = 2
 env_action_size = 1
-
+env_action_space_low = env.action_space.low[0]
+env_action_space_high = env.action_space.high[0]
 np.random.seed(1)
 
 
@@ -65,38 +66,43 @@ class StateValueNetwork:
 
 
 class PolicyNetwork:
-    def __init__(self, state_size, action_size, learning_rate, name='policy_network'):
+    def __init__(self, state_size, action_size, action_space_low, action_space_high,
+                 learning_rate, name='policy_network'):
+
         self.state_size = state_size
         self.action_size = action_size
         self.learning_rate = learning_rate
+        self.n_hidden1 = 12
+        self.init_xavier = tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg",
+                                                                           distribution="uniform")
+        self.action_space_low = action_space_low
+        self.action_space_high = action_space_high
 
         with tf.compat.v1.variable_scope(name):
             self.state = tf.compat.v1.placeholder(tf.float32, [None, self.state_size], name="state")
             self.action = tf.compat.v1.placeholder(tf.int32, [self.action_size], name="action")
             self.R_t = tf.compat.v1.placeholder(tf.float32, name="total_rewards")
 
-            self.W1 = tf.compat.v1.get_variable("W1", [self.state_size, 12],
-                                                initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
-                                                                                                            mode="fan_avg",
-                                                                                                            distribution="uniform",
-                                                                                                            seed=0))
-            self.b1 = tf.compat.v1.get_variable("b1", [12], initializer=tf.compat.v1.zeros_initializer())
-            self.W2 = tf.compat.v1.get_variable("W2", [12, self.action_size],
-                                                initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
-                                                                                                            mode="fan_avg",
-                                                                                                            distribution="uniform",
-                                                                                                            seed=0))
-            self.b2 = tf.compat.v1.get_variable("b2", [self.action_size], initializer=tf.compat.v1.zeros_initializer())
+            self.hidden1 = tf.compat.v1.layers.dense(self.state, self.n_hidden1,
+                                                     tf.nn.elu, self.init_xavier)
+            self.mu = tf.compat.v1.layers.dense(self.hidden1, action_size,
+                                                None, self.init_xavier)
+            self.sigma = tf.compat.v1.layers.dense(self.hidden1, action_size,
+                                                   None, self.init_xavier)
+            self.sigma = tf.nn.softplus(self.sigma) + 1e-5
 
-            self.Z1 = tf.add(tf.matmul(self.state, self.W1), self.b1)
-            self.A1 = tf.nn.relu(self.Z1)
-            self.output = tf.add(tf.matmul(self.A1, self.W2), self.b2)
+            self.norm_dist = tf.compat.v1.distributions.Normal(self.mu, self.sigma)
+            self.action = self.norm_dist.sample(1)
+            self.action = tf.clip_by_value(self.action, self.action_space_low, self.action_space_high)
 
-            # Softmax probability distribution over actions
-            self.actions_distribution = tf.squeeze(tf.nn.softmax(self.output))
-            # Loss with negative log probability
-            self.neg_log_prob = tf.nn.softmax_cross_entropy_with_logits(logits=self.output, labels=self.action)
-            self.loss = tf.reduce_mean(input_tensor=self.neg_log_prob * self.R_t)
+            # # Softmax probability distribution over actions
+            # self.actions_distribution = tf.squeeze(tf.nn.softmax(self.output))
+            # # Loss with negative log probability
+            # self.neg_log_prob = tf.nn.softmax_cross_entropy_with_logits(logits=self.output, labels=self.action)
+            # self.loss = tf.reduce_mean(input_tensor=self.neg_log_prob * self.R_t)
+            self.loss = -tf.compat.v1.log(
+                self.norm_dist.prob(
+                    self.action) + 1e-5) * self.R_t - 1e-5 * self.norm_dist.entropy()
             self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.loss)
 
 
@@ -106,23 +112,24 @@ def policy_network_v2(state):
     n_outputs = 1
 
     with tf.compat.v1.variable_scope("policy_network"):
-        init_xavier = tf.contrib.layers.xavier_initializer()
+        init_xavier = tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg", distribution="uniform")
 
-        hidden1 = tf.layers.dense(state, n_hidden1,
-                                  tf.nn.elu, init_xavier)
-        hidden2 = tf.layers.dense(hidden1, n_hidden2,
-                                  tf.nn.elu, init_xavier)
-        mu = tf.layers.dense(hidden2, n_outputs,
-                             None, init_xavier)
-        sigma = tf.layers.dense(hidden2, n_outputs,
-                                None, init_xavier)
+        hidden1 = tf.compat.v1.layers.dense(state, n_hidden1,
+                                            tf.nn.elu, init_xavier)
+        hidden2 = tf.compat.v1.layers.dense(hidden1, n_hidden2,
+                                            tf.nn.elu, init_xavier)
+        mu = tf.compat.v1.layers.dense(hidden2, n_outputs,
+                                       None, init_xavier)
+        sigma = tf.compat.v1.layers.dense(hidden2, n_outputs,
+                                          None, init_xavier)
         sigma = tf.nn.softplus(sigma) + 1e-5
-        norm_dist = tf.contrib.distributions.Normal(mu, sigma)
+        norm_dist = tf.compat.v1.distributions.Normal(mu, sigma)
         action_tf_var = tf.squeeze(norm_dist.sample(1), axis=0)
         action_tf_var = tf.clip_by_value(action_tf_var,
                                          env.action_space.low[0],
                                          env.action_space.high[0])
     return action_tf_var, norm_dist
+
 
 # Define hyperparameters
 global_state_size = 6
@@ -138,7 +145,8 @@ render = False
 
 # Initialize the policy network
 tf.compat.v1.reset_default_graph()
-policy = PolicyNetwork(global_state_size, global_action_size, learning_rate)
+policy = PolicyNetwork(global_state_size, global_action_size, env_action_space_low, env_action_space_high,
+                       learning_rate)
 state_value_network = StateValueNetwork(global_state_size, learning_rate)
 
 
@@ -163,11 +171,12 @@ def remove_actions_padding(actions):
     # normalize remaining probabilities to 1.
     sum_of_probabilities = np.sum(actions)
     if sum_of_probabilities <= 0:
-      actions = [0.5, 0.5]
+        actions = [0.5, 0.5]
     else:
-      actions = actions / sum_of_probabilities
+        actions = actions / sum_of_probabilities
 
     return actions
+
 
 # Start training the agent with REINFORCE algorithm
 with tf.compat.v1.Session() as sess:
@@ -192,16 +201,17 @@ with tf.compat.v1.Session() as sess:
         episode_transitions = []
 
         for step in range(max_steps):
-            actions_distribution = sess.run(policy.actions_distribution, {policy.state: state})
+            # actions_distribution = sess.run(policy.actions_distribution, {policy.state: state})
 
             # remove padding from actions
             # actions_distribution = remove_actions_padding(actions_distribution)
 
             # take first action value
-            action = actions_distribution[0]
+            # action = actions_distribution[0]
+            action = sess.run(policy.action, {policy.state: state})
 
             # transform (0,1) into (-1, 1) values
-            action = [action * 2 - 1]
+            # action = [action * 2 - 1]
 
             next_state, reward, done, _ = env.step(action)
             # pad next state to size of global state size.
@@ -258,12 +268,13 @@ with tf.compat.v1.Session() as sess:
             #                                                          enumerate(episode_transitions[t:]))
 
             total_discounted_return = sum(discount_factor ** i * t.reward for i, t in
-                                          enumerate(episode_transitions[t:t + n_step-1] if t + n_step-1 < len(episode_transitions)
+                                          enumerate(episode_transitions[t:t + n_step - 1] if t + n_step - 1 < len(
+                                              episode_transitions)
                                                     else episode_transitions[t:]))  # Rt
 
-            if t + n_step-1 < len(episode_transitions):
-                total_approx_discounted_return = discount_factor ** n_step *\
-                                                 episode_transitions[t + n_step-1].next_state_value_approx
+            if t + n_step - 1 < len(episode_transitions):
+                total_approx_discounted_return = discount_factor ** n_step * \
+                                                 episode_transitions[t + n_step - 1].next_state_value_approx
                 total_discounted_return += total_approx_discounted_return
 
             # total_approx_discounted_return = transition.reward + discount_factor * transition.next_state_value_approx
