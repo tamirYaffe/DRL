@@ -1,5 +1,6 @@
 import time
 import matplotlib.pyplot as plt
+import sklearn.preprocessing
 
 import gym
 import numpy as np
@@ -19,6 +20,26 @@ env_action_space_low = env.action_space.low[0]
 env_action_space_high = env.action_space.high[0]
 np.random.seed(1)
 
+# sample from state space for state normalization
+
+state_space_samples = np.array(
+    [env.observation_space.sample() for x in range(10000)])
+scaler = sklearn.preprocessing.StandardScaler()
+scaler.fit(state_space_samples)
+mean = np.mean(state_space_samples)
+std = np.std(state_space_samples)
+
+
+# function to normalize states
+def normalize_state(state):  # requires input shape=(2,)
+    scaled = scaler.transform(state)
+    return scaled
+    # tate = (state - mean) / std
+    # return state
+
+
+# scaler = sklearn.preprocessing.StandardScaler()
+# scaler.fit(state_space_samples)
 
 # Rt is calculated as rewards and discount factor
 
@@ -35,31 +56,43 @@ class StateValueNetwork:
     def __init__(self, state_size, learning_rate, name='state_value_network'):
         self.state_size = state_size
         self.learning_rate = learning_rate
+        self.n_hidden1 = 400
+        self.n_hidden2 = 400
+        self.init_xavier = tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg",
+                                                                           distribution="uniform")
 
         with tf.compat.v1.variable_scope(name):
             self.state = tf.compat.v1.placeholder(tf.float32, [None, self.state_size], name="state")
             self.value = tf.compat.v1.placeholder(tf.int32, 1, name="value")
             self.R_t = tf.compat.v1.placeholder(tf.float32, name="total_rewards")
 
-            self.W1 = tf.compat.v1.get_variable("W1", [self.state_size, 12],
-                                                initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
-                                                                                                            mode="fan_avg",
-                                                                                                            distribution="uniform",
-                                                                                                            seed=0))
-            self.b1 = tf.compat.v1.get_variable("b1", [12], initializer=tf.compat.v1.zeros_initializer())
-            self.W2 = tf.compat.v1.get_variable("W2", [12, 1],
-                                                initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
-                                                                                                            mode="fan_avg",
-                                                                                                            distribution="uniform",
-                                                                                                            seed=0))
-            self.b2 = tf.compat.v1.get_variable("b2", [1], initializer=tf.compat.v1.zeros_initializer())
+            # self.W1 = tf.compat.v1.get_variable("W1", [self.state_size, 12],
+            #                                     initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
+            #                                                                                                 mode="fan_avg",
+            #                                                                                                 distribution="uniform",
+            #                                                                                                 seed=0))
+            # self.b1 = tf.compat.v1.get_variable("b1", [12], initializer=tf.compat.v1.zeros_initializer())
+            # self.W2 = tf.compat.v1.get_variable("W2", [12, 1],
+            #                                     initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
+            #                                                                                                 mode="fan_avg",
+            #                                                                                                 distribution="uniform",
+            #                                                                                                 seed=0))
+            # self.b2 = tf.compat.v1.get_variable("b2", [1], initializer=tf.compat.v1.zeros_initializer())
+            #
+            # self.Z1 = tf.add(tf.matmul(self.state, self.W1), self.b1)
+            # self.A1 = tf.nn.relu(self.Z1)
+            # self.output = tf.add(tf.matmul(self.A1, self.W2), self.b2)
 
-            self.Z1 = tf.add(tf.matmul(self.state, self.W1), self.b1)
-            self.A1 = tf.nn.relu(self.Z1)
-            self.output = tf.add(tf.matmul(self.A1, self.W2), self.b2)
+            self.hidden1 = tf.compat.v1.layers.dense(self.state, self.n_hidden1,
+                                                     tf.nn.elu, self.init_xavier)
+            self.hidden2 = tf.compat.v1.layers.dense(self.hidden1, self.n_hidden2,
+                                                     tf.nn.elu, self.init_xavier)
+
+            self.state_value = tf.compat.v1.layers.dense(self.hidden2, 1,
+                                                         kernel_initializer=self.init_xavier)
 
             # state value estimation
-            self.state_value = tf.squeeze(self.output)
+            # self.state_value = tf.squeeze(self.output)
             # Loss
             self.loss = tf.reduce_mean(tf.math.squared_difference(self.state_value, self.R_t))
             self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.loss)
@@ -68,11 +101,11 @@ class StateValueNetwork:
 class PolicyNetwork:
     def __init__(self, state_size, action_size, action_space_low, action_space_high,
                  learning_rate, name='policy_network'):
-
         self.state_size = state_size
         self.action_size = action_size
         self.learning_rate = learning_rate
-        self.n_hidden1 = 12
+        self.n_hidden1 = 40
+        self.n_hidden2 = 40
         self.init_xavier = tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg",
                                                                            distribution="uniform")
         self.action_space_low = action_space_low
@@ -85,69 +118,48 @@ class PolicyNetwork:
 
             self.hidden1 = tf.compat.v1.layers.dense(self.state, self.n_hidden1,
                                                      tf.nn.elu, self.init_xavier)
-            self.mu = tf.compat.v1.layers.dense(self.hidden1, action_size,
+            self.hidden2 = tf.compat.v1.layers.dense(self.hidden1, self.n_hidden2,
+                                                     tf.nn.elu, self.init_xavier)
+            #
+            # self.output = tf.compat.v1.layers.dense(self.n_hidden2, self.action_size*2,
+            #                                         kernel_initializer=self.init_xavier)
+
+            self.mu = tf.compat.v1.layers.dense(self.hidden2, action_size,
                                                 None, self.init_xavier)
-            self.sigma = tf.compat.v1.layers.dense(self.hidden1, action_size,
+            self.sigma = tf.compat.v1.layers.dense(self.hidden2, action_size,
                                                    None, self.init_xavier)
             self.sigma = tf.nn.softplus(self.sigma) + 1e-5
 
             self.norm_dist = tf.compat.v1.distributions.Normal(self.mu, self.sigma)
-            self.action = self.norm_dist.sample(1)
+            self.action = self.norm_dist.sample()
             self.action = tf.clip_by_value(self.action, self.action_space_low, self.action_space_high)
 
-            # # Softmax probability distribution over actions
-            # self.actions_distribution = tf.squeeze(tf.nn.softmax(self.output))
-            # # Loss with negative log probability
-            # self.neg_log_prob = tf.nn.softmax_cross_entropy_with_logits(logits=self.output, labels=self.action)
-            # self.loss = tf.reduce_mean(input_tensor=self.neg_log_prob * self.R_t)
             self.loss = -tf.compat.v1.log(
                 self.norm_dist.prob(
                     self.action) + 1e-5) * self.R_t - 1e-5 * self.norm_dist.entropy()
             self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.loss)
 
 
-def policy_network_v2(state):
-    n_hidden1 = 40
-    n_hidden2 = 40
-    n_outputs = 1
-
-    with tf.compat.v1.variable_scope("policy_network"):
-        init_xavier = tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg", distribution="uniform")
-
-        hidden1 = tf.compat.v1.layers.dense(state, n_hidden1,
-                                            tf.nn.elu, init_xavier)
-        hidden2 = tf.compat.v1.layers.dense(hidden1, n_hidden2,
-                                            tf.nn.elu, init_xavier)
-        mu = tf.compat.v1.layers.dense(hidden2, n_outputs,
-                                       None, init_xavier)
-        sigma = tf.compat.v1.layers.dense(hidden2, n_outputs,
-                                          None, init_xavier)
-        sigma = tf.nn.softplus(sigma) + 1e-5
-        norm_dist = tf.compat.v1.distributions.Normal(mu, sigma)
-        action_tf_var = tf.squeeze(norm_dist.sample(1), axis=0)
-        action_tf_var = tf.clip_by_value(action_tf_var,
-                                         env.action_space.low[0],
-                                         env.action_space.high[0])
-    return action_tf_var, norm_dist
-
-
 # Define hyperparameters
-global_state_size = 6
-global_action_size = 3
+# todo: change back to global params
+global_state_size = 2
+global_action_size = 1
 
 max_episodes = 5000
-max_steps = 501
+max_steps = 999
 discount_factor = 0.99
-learning_rate = 0.0004
+# learning_rate = 0.0001
+lr_actor = 0.00002  # set learning rates
+lr_critic = 0.001
 
-n_step = 100
+n_step = 20
 render = False
 
 # Initialize the policy network
 tf.compat.v1.reset_default_graph()
 policy = PolicyNetwork(global_state_size, global_action_size, env_action_space_low, env_action_space_high,
-                       learning_rate)
-state_value_network = StateValueNetwork(global_state_size, learning_rate)
+                       lr_actor)
+state_value_network = StateValueNetwork(global_state_size, lr_critic)
 
 
 def pad_state(state_to_pad):
@@ -208,7 +220,7 @@ with tf.compat.v1.Session() as sess:
 
             # take first action value
             # action = actions_distribution[0]
-            action = sess.run(policy.action, {policy.state: state})
+            action = sess.run(policy.action, {policy.state: normalize_state(state)})
 
             # transform (0,1) into (-1, 1) values
             # action = [action * 2 - 1]
@@ -219,27 +231,37 @@ with tf.compat.v1.Session() as sess:
             next_state = next_state.reshape([1, global_state_size])
 
             # calculate approx_value = b(St)
-            state_value_approx = sess.run(state_value_network.state_value, {state_value_network.state: state})
+            state_value_approx = sess.run(state_value_network.state_value,
+                                          {state_value_network.state: normalize_state(state)})
 
             # calculate approx_value = b(S't)
             if done:
                 next_state_value_approx = 0
             else:
                 next_state_value_approx = sess.run(state_value_network.state_value,
-                                                   {state_value_network.state: next_state})
+                                                   {state_value_network.state: normalize_state(next_state)})
 
             if render:
                 env.render()
 
-            # todo: check if this is the right way to handle one_hot with value.
-            action_one_hot = np.zeros(global_action_size)
-            action_one_hot[0] = action[0]
-
-            episode_transitions.append(Transition(state=state, action=action_one_hot, reward=reward,
+            episode_transitions.append(Transition(state=state, action=action, reward=reward,
                                                   next_state=next_state,
                                                   state_value_approx=state_value_approx,
                                                   next_state_value_approx=next_state_value_approx, done=done))
             episode_rewards[episode] += reward
+
+            # backpropagation
+            target = reward + discount_factor * next_state_value_approx
+            advantage = target - state_value_approx
+
+            actor_feed_dict = {policy.state: state, policy.R_t: advantage,
+                               policy.action: action}
+            _, actor_loss = sess.run([policy.optimizer, policy.loss], actor_feed_dict)
+
+            critic_feed_dict = {state_value_network.state: state,
+                                state_value_network.R_t: target}
+            _, critic_loss = sess.run([state_value_network.optimizer, state_value_network.loss],
+                                      critic_feed_dict)
 
             if done or step + 1 == max_steps:
                 if episode > 98:
@@ -249,7 +271,7 @@ with tf.compat.v1.Session() as sess:
                 history.append(average_rewards)
                 print("Episode {} Reward: {} Average over 100 episodes: {}".format(episode, episode_rewards[episode],
                                                                                    round(average_rewards, 2)))
-                if average_rewards > 475:
+                if average_rewards > 89:
                     print(' Solved at episode: ' + str(episode))
                     solved = True
                 break
@@ -259,38 +281,38 @@ with tf.compat.v1.Session() as sess:
             break
 
         # Compute Rt for each time-step t and update the network's weights
-        for t, transition in enumerate(episode_transitions):
-            # total_discounted_return = sum(discount_factor ** i * t.reward for i, t in
-            #                               enumerate(episode_transitions[t:]))  # Rt
+        # for t, transition in enumerate(episode_transitions):
+        #     total_discounted_return = sum(discount_factor ** i * t.reward for i, t in
+        #                                   enumerate(episode_transitions[t:]))  # Rt
 
-            # total_approx_discounted_return = transition.reward + sum(discount_factor ** (i+1)
-            #                                                          * t.next_state_value_approx for i, t in
-            #                                                          enumerate(episode_transitions[t:]))
+        #     # total_approx_discounted_return = transition.reward + sum(discount_factor ** (i+1)
+        #     #                                                          * t.next_state_value_approx for i, t in
+        #     #                                                          enumerate(episode_transitions[t:]))
 
-            total_discounted_return = sum(discount_factor ** i * t.reward for i, t in
-                                          enumerate(episode_transitions[t:t + n_step - 1] if t + n_step - 1 < len(
-                                              episode_transitions)
-                                                    else episode_transitions[t:]))  # Rt
+        #     total_discounted_return = sum(discount_factor ** i * t.reward for i, t in
+        #                                   enumerate(episode_transitions[t:t + n_step - 1] if t + n_step - 1 < len(
+        #                                       episode_transitions)
+        #                                             else episode_transitions[t:]))  # Rt
 
-            if t + n_step - 1 < len(episode_transitions):
-                total_approx_discounted_return = discount_factor ** n_step * \
-                                                 episode_transitions[t + n_step - 1].next_state_value_approx
-                total_discounted_return += total_approx_discounted_return
+        #     if t + n_step - 1 < len(episode_transitions):
+        #         total_approx_discounted_return = discount_factor ** n_step * \
+        #                                          episode_transitions[t + n_step - 1].next_state_value_approx
+        #         total_discounted_return += total_approx_discounted_return
 
-            # total_approx_discounted_return = transition.reward + discount_factor * transition.next_state_value_approx
+        #     # total_approx_discounted_return = transition.reward + discount_factor * transition.next_state_value_approx
 
-            state_value_approx = transition.state_value_approx  # b(st)
+        #     state_value_approx = transition.state_value_approx  # b(st)
 
-            advantage = total_discounted_return - state_value_approx
+        #     advantage = total_discounted_return - state_value_approx
 
-            actor_feed_dict = {policy.state: transition.state, policy.R_t: advantage,
-                               policy.action: transition.action}
-            _, actor_loss = sess.run([policy.optimizer, policy.loss], actor_feed_dict)
+        #     actor_feed_dict = {policy.state: transition.state, policy.R_t: advantage,
+        #                        policy.action: transition.action}
+        #     _, actor_loss = sess.run([policy.optimizer, policy.loss], actor_feed_dict)
 
-            critic_feed_dict = {state_value_network.state: transition.state,
-                                state_value_network.R_t: total_discounted_return}
-            _, critic_loss = sess.run([state_value_network.optimizer, state_value_network.loss],
-                                      critic_feed_dict)
+        #     critic_feed_dict = {state_value_network.state: transition.state,
+        #                         state_value_network.R_t: total_discounted_return}
+        #     _, critic_loss = sess.run([state_value_network.optimizer, state_value_network.loss],
+        #                               critic_feed_dict)
 end_time = time.time()
 print("total time to converge: {}".format(end_time - start_time))
 plot_history(history)
