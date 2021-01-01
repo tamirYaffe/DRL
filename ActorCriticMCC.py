@@ -31,8 +31,8 @@ std = np.std(state_space_samples)
 
 # function to normalize states
 def normalize_state(state):  # requires input shape=(2,)
-    scaled = scaler.transform(state)
-    return scaled
+    scaled = scaler.transform([state])
+    return scaled.reshape(-1)
     # tate = (state - mean) / std
     # return state
 
@@ -119,13 +119,13 @@ class PolicyNetwork:
                                                      tf.nn.elu, self.init_xavier)
             self.hidden2 = tf.compat.v1.layers.dense(self.hidden1, self.n_hidden2,
                                                      tf.nn.elu, self.init_xavier)
-            #
-            # self.output = tf.compat.v1.layers.dense(self.n_hidden2, self.action_size*2,
-            #                                         kernel_initializer=self.init_xavier)
 
-            self.mu = tf.compat.v1.layers.dense(self.hidden2, action_size,
+            self.output = tf.compat.v1.layers.dense(self.hidden2, action_size,
+                                                    kernel_initializer=self.init_xavier)
+
+            self.mu = tf.compat.v1.layers.dense(self.output, 1,
                                                 None, self.init_xavier)
-            self.sigma = tf.compat.v1.layers.dense(self.hidden2, action_size,
+            self.sigma = tf.compat.v1.layers.dense(self.output, 1,
                                                    None, self.init_xavier)
             self.sigma = tf.nn.softplus(self.sigma) + 1e-5
 
@@ -141,8 +141,8 @@ class PolicyNetwork:
 
 # Define hyperparameters
 # todo: change back to global params
-global_state_size = 2
-global_action_size = 1
+global_state_size = 6
+global_action_size = 3
 
 max_episodes = 5000
 max_steps = 999
@@ -203,29 +203,31 @@ with tf.compat.v1.Session() as sess:
         state = env.reset()
 
         # pad state to size of global state size.
+        state = normalize_state(state)
         state = pad_state(state)
-
         state = state.reshape([1, global_state_size])
 
         for step in range(max_steps):
 
-            action = sess.run(policy.action, {policy.state: normalize_state(state)})
+            action, mu, sigma = sess.run([policy.action, policy.mu, policy.sigma], {policy.state: state})
 
             next_state, reward, done, _ = env.step(action)
+
             # pad next state to size of global state size.
+            next_state = normalize_state(next_state.reshape(-1))
             next_state = pad_state(next_state)
             next_state = next_state.reshape([1, global_state_size])
 
             # calculate approx_value = b(St)
             state_value_approx = sess.run(state_value_network.state_value,
-                                          {state_value_network.state: normalize_state(state)})
+                                          {state_value_network.state: state})
 
             # calculate approx_value = b(S't)
             if done:
                 next_state_value_approx = 0
             else:
                 next_state_value_approx = sess.run(state_value_network.state_value,
-                                                   {state_value_network.state: normalize_state(next_state)})
+                                                   {state_value_network.state: next_state})
 
             if render:
                 env.render()
