@@ -5,7 +5,6 @@ import sklearn.preprocessing
 import gym
 import numpy as np
 import tensorflow as tf
-import collections
 
 tf.compat.v1.disable_eager_execution()
 
@@ -194,10 +193,7 @@ def remove_actions_padding(actions):
 with tf.compat.v1.Session() as sess:
     sess.run(tf.compat.v1.global_variables_initializer())
     solved = False
-    Transition = collections.namedtuple("Transition", ["state", "action", "reward", "next_state",
-                                                       "state_value_approx",
-                                                       "next_state_value_approx",
-                                                       "done"])
+
     episode_rewards = np.zeros(max_episodes)
     average_rewards = 0.0
     start_time = time.time()
@@ -210,20 +206,10 @@ with tf.compat.v1.Session() as sess:
         state = pad_state(state)
 
         state = state.reshape([1, global_state_size])
-        episode_transitions = []
 
         for step in range(max_steps):
-            # actions_distribution = sess.run(policy.actions_distribution, {policy.state: state})
 
-            # remove padding from actions
-            # actions_distribution = remove_actions_padding(actions_distribution)
-
-            # take first action value
-            # action = actions_distribution[0]
             action = sess.run(policy.action, {policy.state: normalize_state(state)})
-
-            # transform (0,1) into (-1, 1) values
-            # action = [action * 2 - 1]
 
             next_state, reward, done, _ = env.step(action)
             # pad next state to size of global state size.
@@ -244,10 +230,6 @@ with tf.compat.v1.Session() as sess:
             if render:
                 env.render()
 
-            episode_transitions.append(Transition(state=state, action=action, reward=reward,
-                                                  next_state=next_state,
-                                                  state_value_approx=state_value_approx,
-                                                  next_state_value_approx=next_state_value_approx, done=done))
             episode_rewards[episode] += reward
 
             # backpropagation
@@ -280,39 +262,7 @@ with tf.compat.v1.Session() as sess:
         if solved:
             break
 
-        # Compute Rt for each time-step t and update the network's weights
-        # for t, transition in enumerate(episode_transitions):
-        #     total_discounted_return = sum(discount_factor ** i * t.reward for i, t in
-        #                                   enumerate(episode_transitions[t:]))  # Rt
 
-        #     # total_approx_discounted_return = transition.reward + sum(discount_factor ** (i+1)
-        #     #                                                          * t.next_state_value_approx for i, t in
-        #     #                                                          enumerate(episode_transitions[t:]))
-
-        #     total_discounted_return = sum(discount_factor ** i * t.reward for i, t in
-        #                                   enumerate(episode_transitions[t:t + n_step - 1] if t + n_step - 1 < len(
-        #                                       episode_transitions)
-        #                                             else episode_transitions[t:]))  # Rt
-
-        #     if t + n_step - 1 < len(episode_transitions):
-        #         total_approx_discounted_return = discount_factor ** n_step * \
-        #                                          episode_transitions[t + n_step - 1].next_state_value_approx
-        #         total_discounted_return += total_approx_discounted_return
-
-        #     # total_approx_discounted_return = transition.reward + discount_factor * transition.next_state_value_approx
-
-        #     state_value_approx = transition.state_value_approx  # b(st)
-
-        #     advantage = total_discounted_return - state_value_approx
-
-        #     actor_feed_dict = {policy.state: transition.state, policy.R_t: advantage,
-        #                        policy.action: transition.action}
-        #     _, actor_loss = sess.run([policy.optimizer, policy.loss], actor_feed_dict)
-
-        #     critic_feed_dict = {state_value_network.state: transition.state,
-        #                         state_value_network.R_t: total_discounted_return}
-        #     _, critic_loss = sess.run([state_value_network.optimizer, state_value_network.loss],
-        #                               critic_feed_dict)
 end_time = time.time()
 print("total time to converge: {}".format(end_time - start_time))
 plot_history(history)
