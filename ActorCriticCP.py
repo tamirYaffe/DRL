@@ -218,7 +218,7 @@ with tf.compat.v1.Session() as sess:
                 history.append(average_rewards)
                 print("Episode {} Reward: {} Average over 100 episodes: {}".format(episode, episode_rewards[episode],
                                                                                    round(average_rewards, 2)))
-                if average_rewards > 475:
+                if average_rewards > 475 and episode > 98:
                     print(' Solved at episode: ' + str(episode))
                     solved = True
                 break
