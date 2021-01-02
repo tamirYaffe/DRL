@@ -1,11 +1,12 @@
 import time
 import matplotlib.pyplot as plt
-
+import os
 import gym
 import numpy as np
 import tensorflow as tf
 import collections
-
+path_sep = os.path.sep
+saved_models_dir = 'saved_models'
 tf.compat.v1.disable_eager_execution()
 
 env = gym.make('CartPole-v1')
@@ -144,6 +145,13 @@ def remove_actions_padding(actions):
 # Start training the agent with REINFORCE algorithm
 with tf.compat.v1.Session() as sess:
     sess.run(tf.compat.v1.global_variables_initializer())
+
+    # saver = tf.compat.v1.train.Saver()
+
+    # load model
+    loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + "actor_critic_model.meta")
+    loader.restore(sess, saved_models_dir + path_sep + 'actor_critic_model')
+
     solved = False
     Transition = collections.namedtuple("Transition", ["state", "action", "reward", "next_state",
                                                        "state_value_approx",
@@ -215,6 +223,8 @@ with tf.compat.v1.Session() as sess:
             state = next_state
 
         if solved:
+            # save models
+            # saver.save(sess, saved_models_dir + path_sep + "actor_critic_model.meta")
             break
 
         # Compute Rt for each time-step t and update the network's weights
