@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import os
 import gym
 import numpy as np
+import sklearn.preprocessing
 import tensorflow as tf
 import collections
 
@@ -10,12 +11,36 @@ path_sep = os.path.sep
 saved_models_dir = 'saved_models'
 tf.compat.v1.disable_eager_execution()
 
-env = gym.make('CartPole-v1')
-env_state_size = 4
-env_action_size = 2
+# env = gym.make('CartPole-v1')
+# env_state_size = 4
+# env_action_size = 2
+
+env = gym.make('MountainCarContinuous-v0')
+# Continuous action space: (-1.000 to 1.000)
+# Reward range: (-inf, inf)
+# Observation range, dimension 0: (-1.200 to 0.600)
+# Observation range, dimension 1: (-0.070 to 0.070)
+env_state_size = 2
+env_action_size = 1
+env_action_space_low = env.action_space.low[0]
+env_action_space_high = env.action_space.high[0]
 
 np.random.seed(1)
 
+# sample from state space for state normalization
+
+state_space_samples = np.array(
+    [env.observation_space.sample() for x in range(10000)])
+scaler = sklearn.preprocessing.StandardScaler()
+scaler.fit(state_space_samples)
+mean = np.mean(state_space_samples)
+std = np.std(state_space_samples)
+
+
+# function to normalize states
+def normalize_state(state):  # requires input shape=(2,)
+    scaled = scaler.transform([state])
+    return scaled.reshape(-1)
 
 # Rt is calculated as rewards and discount factor
 
@@ -67,7 +92,8 @@ class PolicyNetwork:
         self.state_size = state_size
         self.action_size = action_size
         self.learning_rate = learning_rate
-
+        self.init_xavier = tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg",
+                                                                           distribution="uniform")
         with tf.compat.v1.variable_scope(name):
             self.state = tf.compat.v1.placeholder(tf.float32, [None, self.state_size], name="state")
             self.action = tf.compat.v1.placeholder(tf.int32, [self.action_size], name="action")
@@ -90,11 +116,19 @@ class PolicyNetwork:
             self.A1 = tf.nn.relu(self.Z1)
             self.output = tf.add(tf.matmul(self.A1, self.W2), self.b2)
 
-            # Softmax probability distribution over actions
-            self.actions_distribution = tf.squeeze(tf.nn.softmax(self.output))
-            # Loss with negative log probability
-            self.neg_log_prob = tf.nn.softmax_cross_entropy_with_logits(logits=self.output, labels=self.action)
-            self.loss = tf.reduce_mean(input_tensor=self.neg_log_prob * self.R_t)
+            self.mu = tf.compat.v1.layers.dense(self.output, 1,
+                                                None, self.init_xavier)
+            self.sigma = tf.compat.v1.layers.dense(self.output, 1,
+                                                   None, self.init_xavier)
+            self.sigma = tf.nn.softplus(self.sigma) + 1e-5
+
+            self.norm_dist = tf.compat.v1.distributions.Normal(self.mu, self.sigma)
+            self.action = self.norm_dist.sample()
+            self.action = tf.clip_by_value(self.action, env_action_space_low, env_action_space_high)
+
+            self.loss = -tf.compat.v1.log(
+                self.norm_dist.prob(
+                    self.action) + 1e-5) * self.R_t - 1e-5 * self.norm_dist.entropy()
             self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.loss)
 
 
@@ -103,17 +137,19 @@ global_state_size = 6
 global_action_size = 3
 
 max_episodes = 5000
-max_steps = 501
+max_steps = 999
 discount_factor = 0.99
-learning_rate = 0.0004
+# learning_rate = 0.0001
+lr_actor = 0.00002  # set learning rates
+lr_critic = 0.001
 
-n_step = 100
+n_step = 20
 render = False
 
 # Initialize the policy network
 tf.compat.v1.reset_default_graph()
-policy = PolicyNetwork(global_state_size, global_action_size, learning_rate)
-state_value_network = StateValueNetwork(global_state_size, learning_rate)
+policy = PolicyNetwork(global_state_size, global_action_size, lr_actor)
+state_value_network = StateValueNetwork(global_state_size, lr_critic)
 
 
 def pad_state(state_to_pad):
@@ -184,29 +220,26 @@ with tf.compat.v1.Session() as sess:
         state = env.reset()
 
         # pad state to size of global state size.
+        state = normalize_state(state)
         state = pad_state(state)
-
         state = state.reshape([1, global_state_size])
+
         episode_transitions = []
 
         for step in range(max_steps):
 
-            actions_distribution = sess.run(policy.actions_distribution, {policy.state: state})
+            action = sess.run(policy.action, {policy.state: state})
 
-            # remove padding from actions
-            # actions_distribution = remove_actions_padding(actions_distribution)
+            next_state, reward, done, _ = env.step(action)
 
-            action = np.random.choice(np.arange(len(actions_distribution)), p=actions_distribution)
-            if action >= env_action_size:
-                next_state, reward, done = state, 0, True
-            else:
-                next_state, reward, done, _ = env.step(action)
-                # pad next state to size of global state size.
-                next_state = pad_state(next_state)
-                next_state = next_state.reshape([1, global_state_size])
+            # pad next state to size of global state size.
+            next_state = normalize_state(next_state.reshape(-1))
+            next_state = pad_state(next_state)
+            next_state = next_state.reshape([1, global_state_size])
 
             # calculate approx_value = b(St)
-            state_value_approx = sess.run(state_value_network.state_value, {state_value_network.state: state})
+            state_value_approx = sess.run(state_value_network.state_value,
+                                          {state_value_network.state: state})
 
             # calculate approx_value = b(S't)
             if done:
@@ -218,23 +251,32 @@ with tf.compat.v1.Session() as sess:
             if render:
                 env.render()
 
-            action_one_hot = np.zeros(global_action_size)
-            action_one_hot[action] = 1
-            episode_transitions.append(Transition(state=state, action=action_one_hot, reward=reward,
-                                                  next_state=next_state,
-                                                  state_value_approx=state_value_approx,
-                                                  next_state_value_approx=next_state_value_approx, done=done))
             episode_rewards[episode] += reward
+
+            # backpropagation
+            target = reward + discount_factor * next_state_value_approx
+            advantage = target - state_value_approx
+
+            actor_feed_dict = {policy.state: state, policy.R_t: advantage,
+                               policy.action: action}
+            _, actor_loss = sess.run([policy.optimizer, policy.loss], actor_feed_dict)
+
+            critic_feed_dict = {state_value_network.state: state,
+                                state_value_network.R_t: target}
+            _, critic_loss = sess.run([state_value_network.optimizer, state_value_network.loss],
+                                      critic_feed_dict)
 
             if done:
                 if episode > 98:
                     # Check if solved
                     average_rewards = np.mean(episode_rewards[(episode - 99):episode + 1])
+                else:
+                    average_rewards = np.mean(episode_rewards[:episode + 1])
 
                 history.append(average_rewards)
                 print("Episode {} Reward: {} Average over 100 episodes: {}".format(episode, episode_rewards[episode],
                                                                                    round(average_rewards, 2)))
-                if average_rewards > 475:
+                if average_rewards > 89:
                     print(' Solved at episode: ' + str(episode))
                     solved = True
                 break
@@ -245,39 +287,7 @@ with tf.compat.v1.Session() as sess:
             # saver.save(sess, saved_models_dir + path_sep + "actor_critic_model.meta")
             break
 
-        # Compute Rt for each time-step t and update the network's weights
-        for t, transition in enumerate(episode_transitions):
-            # total_discounted_return = sum(discount_factor ** i * t.reward for i, t in
-            #                               enumerate(episode_transitions[t:]))  # Rt
 
-            # total_approx_discounted_return = transition.reward + sum(discount_factor ** (i+1)
-            #                                                          * t.next_state_value_approx for i, t in
-            #                                                          enumerate(episode_transitions[t:]))
-
-            total_discounted_return = sum(discount_factor ** i * t.reward for i, t in
-                                          enumerate(episode_transitions[t:t + n_step - 1] if t + n_step - 1 < len(
-                                              episode_transitions)
-                                                    else episode_transitions[t:]))  # Rt
-
-            if t + n_step - 1 < len(episode_transitions):
-                total_approx_discounted_return = discount_factor ** n_step * \
-                                                 episode_transitions[t + n_step - 1].next_state_value_approx
-                total_discounted_return += total_approx_discounted_return
-
-            # total_approx_discounted_return = transition.reward + discount_factor * transition.next_state_value_approx
-
-            state_value_approx = transition.state_value_approx  # b(st)
-
-            advantage = total_discounted_return - state_value_approx
-
-            actor_feed_dict = {policy.state: transition.state, policy.R_t: advantage,
-                               policy.action: transition.action}
-            _, actor_loss = sess.run([policy.optimizer, policy.loss], actor_feed_dict)
-
-            critic_feed_dict = {state_value_network.state: transition.state,
-                                state_value_network.R_t: total_discounted_return}
-            _, critic_loss = sess.run([state_value_network.optimizer, state_value_network.loss],
-                                      critic_feed_dict)
 end_time = time.time()
 print("total time to converge: {}".format(end_time - start_time))
 plot_history(history)

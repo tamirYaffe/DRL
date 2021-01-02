@@ -146,11 +146,11 @@ def remove_actions_padding(actions):
 with tf.compat.v1.Session() as sess:
     sess.run(tf.compat.v1.global_variables_initializer())
 
-    # saver = tf.compat.v1.train.Saver()
+    saver = tf.compat.v1.train.Saver()
 
     # load model
-    loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + "actor_critic_model.meta")
-    loader.restore(sess, saved_models_dir + path_sep + 'actor_critic_model')
+    # loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + "actor_critic_model.meta")
+    # loader.restore(sess, saved_models_dir + path_sep + 'actor_critic_model')
 
     solved = False
     Transition = collections.namedtuple("Transition", ["state", "action", "reward", "next_state",
@@ -212,6 +212,8 @@ with tf.compat.v1.Session() as sess:
                 if episode > 98:
                     # Check if solved
                     average_rewards = np.mean(episode_rewards[(episode - 99):episode + 1])
+                else:
+                    average_rewards = np.mean(episode_rewards[:episode + 1])
 
                 history.append(average_rewards)
                 print("Episode {} Reward: {} Average over 100 episodes: {}".format(episode, episode_rewards[episode],
@@ -224,7 +226,7 @@ with tf.compat.v1.Session() as sess:
 
         if solved:
             # save models
-            # saver.save(sess, saved_models_dir + path_sep + "actor_critic_model.meta")
+            saver.save(sess, saved_models_dir + path_sep + "actor_critic_model.meta")
             break
 
         # Compute Rt for each time-step t and update the network's weights
