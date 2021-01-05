@@ -140,7 +140,7 @@ max_episodes = 5000
 max_steps = 999
 discount_factor = 0.99
 # learning_rate = 0.0001
-lr_actor = 0.00002  # set learning rates
+lr_actor = 0.0002  # set learning rates
 lr_critic = 0.001
 
 n_step = 20
@@ -276,7 +276,7 @@ with tf.compat.v1.Session() as sess:
                 history.append(average_rewards)
                 print("Episode {} Reward: {} Average over 100 episodes: {}".format(episode, episode_rewards[episode],
                                                                                    round(average_rewards, 2)))
-                if average_rewards > 89:
+                if average_rewards > 89 and episode > 98:
                     print(' Solved at episode: ' + str(episode))
                     solved = True
                 break
@@ -284,7 +284,7 @@ with tf.compat.v1.Session() as sess:
 
         if solved:
             # save models
-            # saver.save(sess, saved_models_dir + path_sep + "actor_critic_model.meta")
+            # saver.save(sess, saved_models_dir + path_sep + "actor_critic_model")
             break
 
 
