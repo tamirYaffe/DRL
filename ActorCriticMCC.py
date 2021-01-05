@@ -1,11 +1,13 @@
 import time
 import matplotlib.pyplot as plt
-import sklearn.preprocessing
-
+import os
 import gym
 import numpy as np
+import sklearn.preprocessing
 import tensorflow as tf
 
+path_sep = os.path.sep
+saved_models_dir = 'saved_models'
 tf.compat.v1.disable_eager_execution()
 
 env = gym.make('MountainCarContinuous-v0')
@@ -33,12 +35,6 @@ std = np.std(state_space_samples)
 def normalize_state(state):  # requires input shape=(2,)
     scaled = scaler.transform([state])
     return scaled.reshape(-1)
-    # tate = (state - mean) / std
-    # return state
-
-
-# scaler = sklearn.preprocessing.StandardScaler()
-# scaler.fit(state_space_samples)
 
 # Rt is calculated as rewards and discount factor
 
@@ -65,23 +61,6 @@ class StateValueNetwork:
             self.value = tf.compat.v1.placeholder(tf.int32, 1, name="value")
             self.R_t = tf.compat.v1.placeholder(tf.float32, name="total_rewards")
 
-            # self.W1 = tf.compat.v1.get_variable("W1", [self.state_size, 12],
-            #                                     initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
-            #                                                                                                 mode="fan_avg",
-            #                                                                                                 distribution="uniform",
-            #                                                                                                 seed=0))
-            # self.b1 = tf.compat.v1.get_variable("b1", [12], initializer=tf.compat.v1.zeros_initializer())
-            # self.W2 = tf.compat.v1.get_variable("W2", [12, 1],
-            #                                     initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
-            #                                                                                                 mode="fan_avg",
-            #                                                                                                 distribution="uniform",
-            #                                                                                                 seed=0))
-            # self.b2 = tf.compat.v1.get_variable("b2", [1], initializer=tf.compat.v1.zeros_initializer())
-            #
-            # self.Z1 = tf.add(tf.matmul(self.state, self.W1), self.b1)
-            # self.A1 = tf.nn.relu(self.Z1)
-            # self.output = tf.add(tf.matmul(self.A1, self.W2), self.b2)
-
             self.hidden1 = tf.compat.v1.layers.dense(self.state, self.n_hidden1,
                                                      tf.nn.elu, self.init_xavier)
             self.hidden2 = tf.compat.v1.layers.dense(self.hidden1, self.n_hidden2,
@@ -90,16 +69,13 @@ class StateValueNetwork:
             self.state_value = tf.compat.v1.layers.dense(self.hidden2, 1,
                                                          kernel_initializer=self.init_xavier)
 
-            # state value estimation
-            # self.state_value = tf.squeeze(self.output)
             # Loss
             self.loss = tf.reduce_mean(tf.math.squared_difference(self.state_value, self.R_t))
             self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.loss)
 
 
 class PolicyNetwork:
-    def __init__(self, state_size, action_size, action_space_low, action_space_high,
-                 learning_rate, name='policy_network'):
+    def __init__(self, state_size, action_size, learning_rate, name='policy_network'):
         self.state_size = state_size
         self.action_size = action_size
         self.learning_rate = learning_rate
@@ -107,9 +83,6 @@ class PolicyNetwork:
         self.n_hidden2 = 40
         self.init_xavier = tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg",
                                                                            distribution="uniform")
-        self.action_space_low = action_space_low
-        self.action_space_high = action_space_high
-
         with tf.compat.v1.variable_scope(name):
             self.state = tf.compat.v1.placeholder(tf.float32, [None, self.state_size], name="state")
             self.action = tf.compat.v1.placeholder(tf.int32, [self.action_size], name="action")
@@ -131,7 +104,7 @@ class PolicyNetwork:
 
             self.norm_dist = tf.compat.v1.distributions.Normal(self.mu, self.sigma)
             self.action = self.norm_dist.sample()
-            self.action = tf.clip_by_value(self.action, self.action_space_low, self.action_space_high)
+            self.action = tf.clip_by_value(self.action, env_action_space_low, env_action_space_high)
 
             self.loss = -tf.compat.v1.log(
                 self.norm_dist.prob(
@@ -140,7 +113,6 @@ class PolicyNetwork:
 
 
 # Define hyperparameters
-# todo: change back to global params
 global_state_size = 6
 global_action_size = 3
 
@@ -156,8 +128,7 @@ render = False
 
 # Initialize the policy network
 tf.compat.v1.reset_default_graph()
-policy = PolicyNetwork(global_state_size, global_action_size, env_action_space_low, env_action_space_high,
-                       lr_actor)
+policy = PolicyNetwork(global_state_size, global_action_size, lr_actor)
 state_value_network = StateValueNetwork(global_state_size, lr_critic)
 
 
@@ -174,25 +145,11 @@ def pad_state(state_to_pad):
     return padded_state
 
 
-def remove_actions_padding(actions):
-    if len(actions) == env_action_size:
-        return actions
-
-    actions = actions[:env_action_size]
-    # normalize remaining probabilities to 1.
-    sum_of_probabilities = np.sum(actions)
-    if sum_of_probabilities <= 0:
-        actions = [0.5, 0.5]
-    else:
-        actions = actions / sum_of_probabilities
-
-    return actions
-
-
 # Start training the agent with REINFORCE algorithm
 with tf.compat.v1.Session() as sess:
     sess.run(tf.compat.v1.global_variables_initializer())
     solved = False
+    saver = tf.compat.v1.train.Saver()
 
     episode_rewards = np.zeros(max_episodes)
     average_rewards = 0.0
@@ -209,7 +166,7 @@ with tf.compat.v1.Session() as sess:
 
         for step in range(max_steps):
 
-            action, mu, sigma = sess.run([policy.action, policy.mu, policy.sigma], {policy.state: state})
+            action = sess.run(policy.action, {policy.state: state})
 
             next_state, reward, done, _ = env.step(action)
 
@@ -247,21 +204,25 @@ with tf.compat.v1.Session() as sess:
             _, critic_loss = sess.run([state_value_network.optimizer, state_value_network.loss],
                                       critic_feed_dict)
 
-            if done or step + 1 == max_steps:
+            if done:
                 if episode > 98:
                     # Check if solved
                     average_rewards = np.mean(episode_rewards[(episode - 99):episode + 1])
+                else:
+                    average_rewards = np.mean(episode_rewards[:episode + 1])
 
                 history.append(average_rewards)
                 print("Episode {} Reward: {} Average over 100 episodes: {}".format(episode, episode_rewards[episode],
                                                                                    round(average_rewards, 2)))
-                if average_rewards > 89:
+                if average_rewards > 89 and episode > 98:
                     print(' Solved at episode: ' + str(episode))
                     solved = True
                 break
             state = next_state
 
         if solved:
+            # save models
+            saver.save(sess, saved_models_dir + path_sep + "MCC_model")
             break
 
 

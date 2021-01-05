@@ -226,7 +226,7 @@ with tf.compat.v1.Session() as sess:
 
         if solved:
             # save models
-            saver.save(sess, saved_models_dir + path_sep + "actor_critic_model.meta")
+            saver.save(sess, saved_models_dir + path_sep + "actor_critic_model")
             break
 
         # Compute Rt for each time-step t and update the network's weights
