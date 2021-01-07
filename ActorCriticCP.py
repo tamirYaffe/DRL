@@ -37,18 +37,18 @@ class StateValueNetwork:
             self.value = tf.compat.v1.placeholder(tf.int32, 1, name="value")
             self.R_t = tf.compat.v1.placeholder(tf.float32, name="total_rewards")
 
-            self.W1 = tf.compat.v1.get_variable("W1", [self.state_size, 12],
+            self.W1 = tf.compat.v1.get_variable("CP_W1", [self.state_size, 12],
                                                 initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
                                                                                                             mode="fan_avg",
                                                                                                             distribution="uniform",
                                                                                                             seed=0))
-            self.b1 = tf.compat.v1.get_variable("b1", [12], initializer=tf.compat.v1.zeros_initializer())
-            self.W2 = tf.compat.v1.get_variable("W2", [12, 1],
+            self.b1 = tf.compat.v1.get_variable("CP_b1", [12], initializer=tf.compat.v1.zeros_initializer())
+            self.W2 = tf.compat.v1.get_variable("CP_W2", [12, 1],
                                                 initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
                                                                                                             mode="fan_avg",
                                                                                                             distribution="uniform",
                                                                                                             seed=0))
-            self.b2 = tf.compat.v1.get_variable("b2", [1], initializer=tf.compat.v1.zeros_initializer())
+            self.b2 = tf.compat.v1.get_variable("CP_b2", [1], initializer=tf.compat.v1.zeros_initializer())
 
             self.Z1 = tf.add(tf.matmul(self.state, self.W1), self.b1)
             self.A1 = tf.nn.relu(self.Z1)
@@ -72,18 +72,18 @@ class PolicyNetwork:
             self.action = tf.compat.v1.placeholder(tf.int32, [self.action_size], name="action")
             self.R_t = tf.compat.v1.placeholder(tf.float32, name="total_rewards")
 
-            self.W1 = tf.compat.v1.get_variable("W1", [self.state_size, 12],
+            self.W1 = tf.compat.v1.get_variable("CP_W1", [self.state_size, 12],
                                                 initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
                                                                                                             mode="fan_avg",
                                                                                                             distribution="uniform",
                                                                                                             seed=0))
-            self.b1 = tf.compat.v1.get_variable("b1", [12], initializer=tf.compat.v1.zeros_initializer())
-            self.W2 = tf.compat.v1.get_variable("W2", [12, self.action_size],
+            self.b1 = tf.compat.v1.get_variable("CP_b1", [12], initializer=tf.compat.v1.zeros_initializer())
+            self.W2 = tf.compat.v1.get_variable("CP_W2", [12, self.action_size],
                                                 initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
                                                                                                             mode="fan_avg",
                                                                                                             distribution="uniform",
                                                                                                             seed=0))
-            self.b2 = tf.compat.v1.get_variable("b2", [self.action_size], initializer=tf.compat.v1.zeros_initializer())
+            self.b2 = tf.compat.v1.get_variable("CP_b2", [self.action_size], initializer=tf.compat.v1.zeros_initializer())
 
             self.Z1 = tf.add(tf.matmul(self.state, self.W1), self.b1)
             self.A1 = tf.nn.relu(self.Z1)
