@@ -63,7 +63,7 @@ class StateValueNetwork:
                                                                                                             distribution="uniform",
                                                                                                             seed=0))
             self.b1 = tf.compat.v1.get_variable("MC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
-            self.W2 = tf.compat.v1.get_variable("MC_W2", [36, 1],
+            self.W2 = tf.compat.v1.get_variable("MC_W2", [56, 1],
                                                 initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
                                                                                                             mode="fan_avg",
                                                                                                             distribution="uniform",
@@ -88,20 +88,20 @@ class StateValueNetwork:
             self.CP_A1 = tf.nn.relu(self.CP_Z1)  # (batch_size, 12)
 
             # Acrobot
-            self.AC_W1 = tf.compat.v1.get_variable("AC_W1", [self.state_size, 12],
+            self.AC_W1 = tf.compat.v1.get_variable("AC_W1", [self.state_size, 32],
                                                    initializer=tf.compat.v1.keras.initializers.VarianceScaling(
                                                        scale=1.0,
                                                        mode="fan_avg",
                                                        distribution="uniform",
                                                        seed=0))
 
-            self.AC_b1 = tf.compat.v1.get_variable("AC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
+            self.AC_b1 = tf.compat.v1.get_variable("AC_b1", [32], initializer=tf.compat.v1.zeros_initializer())
 
             self.AC_Z1 = tf.add(tf.matmul(self.state, self.AC_W1), self.AC_b1)
-            self.AC_A1 = tf.nn.relu(self.AC_Z1)  # (batch_size, 12)
+            self.AC_A1 = tf.nn.relu(self.AC_Z1)  # (batch_size, 32)
 
             # concat layers
-            self.concat_layer = tf.concat([self.A1, self.CP_A1, self.AC_A1], axis=1)  # (batch_size, 36)
+            self.concat_layer = tf.concat([self.A1, self.CP_A1, self.AC_A1], axis=1)  # (batch_size, 56)
 
             self.output = tf.add(tf.matmul(self.concat_layer, self.W2), self.b2)
 
@@ -130,7 +130,7 @@ class PolicyNetwork:
                                                                                                             distribution="uniform",
                                                                                                             seed=0))
             self.b1 = tf.compat.v1.get_variable("MC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
-            self.W2 = tf.compat.v1.get_variable("MC_W2", [36, self.action_size],
+            self.W2 = tf.compat.v1.get_variable("MC_W2", [56, self.action_size],
                                                 initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
                                                                                                             mode="fan_avg",
                                                                                                             distribution="uniform",
@@ -156,20 +156,20 @@ class PolicyNetwork:
             self.CP_A1 = tf.nn.relu(self.CP_Z1)  # (batch_size, 12)
 
             # Acrobot
-            self.AC_W1 = tf.compat.v1.get_variable("AC_W1", [self.state_size, 12],
+            self.AC_W1 = tf.compat.v1.get_variable("AC_W1", [self.state_size, 32],
                                                    initializer=tf.compat.v1.keras.initializers.VarianceScaling(
                                                        scale=1.0,
                                                        mode="fan_avg",
                                                        distribution="uniform",
                                                        seed=0))
 
-            self.AC_b1 = tf.compat.v1.get_variable("AC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
+            self.AC_b1 = tf.compat.v1.get_variable("AC_b1", [32], initializer=tf.compat.v1.zeros_initializer())
 
             self.AC_Z1 = tf.add(tf.matmul(self.state, self.AC_W1), self.AC_b1)
-            self.AC_A1 = tf.nn.relu(self.AC_Z1)  # (batch_size, 12)
+            self.AC_A1 = tf.nn.relu(self.AC_Z1)  # (batch_size, 32)
 
             # concat layers
-            self.concat_layer = tf.concat([self.A1, self.CP_A1, self.AC_A1], axis=1)  # (batch_size, 36)
+            self.concat_layer = tf.concat([self.A1, self.CP_A1, self.AC_A1], axis=1)  # (batch_size, 56)
 
             self.output = tf.add(tf.matmul(self.concat_layer, self.W2), self.b2)
 
@@ -234,6 +234,10 @@ with tf.compat.v1.Session() as sess:
     # Acrobot
     # AC_loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + 'AC' + path_sep + "AC_model.meta")
     # AC_loader.restore(sess, saved_models_dir + path_sep + 'AC' + path_sep + 'AC_model')
+
+    # CPAC
+    AC_loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + 'CPAC' + path_sep + "CPAC_model.meta")
+    AC_loader.restore(sess, saved_models_dir + path_sep + 'CPAC' + path_sep + 'CPAC_model')
 
     solved = False
     # saver = tf.compat.v1.train.Saver()
