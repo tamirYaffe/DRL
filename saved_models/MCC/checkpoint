@@ -1,0 +1,2 @@
+model_checkpoint_path: "MCC_model"
+all_model_checkpoint_paths: "MCC_model"

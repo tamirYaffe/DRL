@@ -71,8 +71,39 @@ class StateValueNetwork:
             self.b2 = tf.compat.v1.get_variable("MC_b2", [1], initializer=tf.compat.v1.zeros_initializer())
 
             self.Z1 = tf.add(tf.matmul(self.state, self.W1), self.b1)
-            self.A1 = tf.nn.relu(self.Z1)
-            self.output = tf.add(tf.matmul(self.A1, self.W2), self.b2)
+            self.A1 = tf.nn.relu(self.Z1)  # (batch_size, 12)
+
+            # adding pre-trained layers
+            # CartPole
+            self.CP_W1 = tf.compat.v1.get_variable("CP_W1", [self.state_size, 12],
+                                                   initializer=tf.compat.v1.keras.initializers.VarianceScaling(
+                                                       scale=1.0,
+                                                       mode="fan_avg",
+                                                       distribution="uniform",
+                                                       seed=0))
+
+            self.CP_b1 = tf.compat.v1.get_variable("CP_b1", [12], initializer=tf.compat.v1.zeros_initializer())
+
+            self.CP_Z1 = tf.add(tf.matmul(self.state, self.CP_W1), self.CP_b1)
+            self.CP_A1 = tf.nn.relu(self.CP_Z1)  # (batch_size, 12)
+
+            # Acrobot
+            self.AC_W1 = tf.compat.v1.get_variable("AC_W1", [self.state_size, 12],
+                                                   initializer=tf.compat.v1.keras.initializers.VarianceScaling(
+                                                       scale=1.0,
+                                                       mode="fan_avg",
+                                                       distribution="uniform",
+                                                       seed=0))
+
+            self.AC_b1 = tf.compat.v1.get_variable("AC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
+
+            self.AC_Z1 = tf.add(tf.matmul(self.state, self.AC_W1), self.AC_b1)
+            self.AC_A1 = tf.nn.relu(self.AC_Z1)  # (batch_size, 12)
+
+            # concat layers
+            self.concat_layer = tf.concat([self.A1, self.CP_A1, self.AC_A1], axis=1)  # (batch_size, 36)
+
+            self.output = tf.add(tf.matmul(self.concat_layer, self.W2), self.b2)
 
             # state value estimation
             self.state_value = tf.squeeze(self.output)
@@ -104,11 +135,43 @@ class PolicyNetwork:
                                                                                                             mode="fan_avg",
                                                                                                             distribution="uniform",
                                                                                                             seed=0))
-            self.b2 = tf.compat.v1.get_variable("MC_b2", [self.action_size], initializer=tf.compat.v1.zeros_initializer())
+            self.b2 = tf.compat.v1.get_variable("MC_b2", [self.action_size],
+                                                initializer=tf.compat.v1.zeros_initializer())
 
             self.Z1 = tf.add(tf.matmul(self.state, self.W1), self.b1)
             self.A1 = tf.nn.relu(self.Z1)
-            self.output = tf.add(tf.matmul(self.A1, self.W2), self.b2)
+
+            # adding pre-trained layers
+            # CartPole
+            self.CP_W1 = tf.compat.v1.get_variable("CP_W1", [self.state_size, 12],
+                                                   initializer=tf.compat.v1.keras.initializers.VarianceScaling(
+                                                       scale=1.0,
+                                                       mode="fan_avg",
+                                                       distribution="uniform",
+                                                       seed=0))
+
+            self.CP_b1 = tf.compat.v1.get_variable("CP_b1", [12], initializer=tf.compat.v1.zeros_initializer())
+
+            self.CP_Z1 = tf.add(tf.matmul(self.state, self.CP_W1), self.CP_b1)
+            self.CP_A1 = tf.nn.relu(self.CP_Z1)  # (batch_size, 12)
+
+            # Acrobot
+            self.AC_W1 = tf.compat.v1.get_variable("AC_W1", [self.state_size, 12],
+                                                   initializer=tf.compat.v1.keras.initializers.VarianceScaling(
+                                                       scale=1.0,
+                                                       mode="fan_avg",
+                                                       distribution="uniform",
+                                                       seed=0))
+
+            self.AC_b1 = tf.compat.v1.get_variable("AC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
+
+            self.AC_Z1 = tf.add(tf.matmul(self.state, self.AC_W1), self.AC_b1)
+            self.AC_A1 = tf.nn.relu(self.AC_Z1)  # (batch_size, 12)
+
+            # concat layers
+            self.concat_layer = tf.concat([self.A1, self.CP_A1, self.AC_A1], axis=1)  # (batch_size, 36)
+
+            self.output = tf.add(tf.matmul(self.concat_layer, self.W2), self.b2)
 
             self.mu = tf.compat.v1.layers.dense(self.output, 1,
                                                 None, self.init_xavier)
@@ -162,8 +225,18 @@ def pad_state(state_to_pad):
 # Start training the agent with REINFORCE algorithm
 with tf.compat.v1.Session() as sess:
     sess.run(tf.compat.v1.global_variables_initializer())
+
+    # load pre-trained values
+    # CartPole
+    CP_loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + 'CP' + path_sep + "CP_model.meta")
+    CP_loader.restore(sess, saved_models_dir + path_sep + 'CP' + path_sep + "CP_model")
+
+    # Acrobot
+    AC_loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + 'AC' + path_sep + "AC_model.meta")
+    AC_loader.restore(sess, saved_models_dir + path_sep + 'AC' + path_sep + 'AC_model')
+
     solved = False
-    saver = tf.compat.v1.train.Saver()
+    # saver = tf.compat.v1.train.Saver()
 
     episode_rewards = np.zeros(max_episodes)
     average_rewards = 0.0
@@ -236,9 +309,8 @@ with tf.compat.v1.Session() as sess:
 
         if solved:
             # save models
-            saver.save(sess, saved_models_dir + path_sep + 'MCC' + path_sep + "MCC_model")
+            # saver.save(sess, saved_models_dir + path_sep + 'MCC' + path_sep + "MCC_model")
             break
-
 
 end_time = time.time()
 print("total time to converge: {}".format(end_time - start_time))

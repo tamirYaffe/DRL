@@ -1,0 +1,2 @@
+model_checkpoint_path: "/content/drive/Shareddrives/DRL/Ass3/ac_model/AC/actor_critic_model"
+all_model_checkpoint_paths: "/content/drive/Shareddrives/DRL/Ass3/ac_model/AC/actor_critic_model"
