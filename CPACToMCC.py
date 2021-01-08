@@ -63,7 +63,7 @@ class StateValueNetwork:
                                                                                                             distribution="uniform",
                                                                                                             seed=0))
             self.b1 = tf.compat.v1.get_variable("MC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
-            self.W2 = tf.compat.v1.get_variable("MC_W2", [12, 1],
+            self.W2 = tf.compat.v1.get_variable("MC_W2", [36, 1],
                                                 initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
                                                                                                             mode="fan_avg",
                                                                                                             distribution="uniform",
@@ -130,7 +130,7 @@ class PolicyNetwork:
                                                                                                             distribution="uniform",
                                                                                                             seed=0))
             self.b1 = tf.compat.v1.get_variable("MC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
-            self.W2 = tf.compat.v1.get_variable("MC_W2", [12, self.action_size],
+            self.W2 = tf.compat.v1.get_variable("MC_W2", [36, self.action_size],
                                                 initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
                                                                                                             mode="fan_avg",
                                                                                                             distribution="uniform",
@@ -228,12 +228,12 @@ with tf.compat.v1.Session() as sess:
 
     # load pre-trained values
     # CartPole
-    CP_loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + 'CP' + path_sep + "CP_model.meta")
-    CP_loader.restore(sess, saved_models_dir + path_sep + 'CP' + path_sep + "CP_model")
+    # CP_loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + 'CP' + path_sep + "CP_model.meta")
+    # CP_loader.restore(sess, saved_models_dir + path_sep + 'CP' + path_sep + "CP_model")
 
     # Acrobot
-    AC_loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + 'AC' + path_sep + "AC_model.meta")
-    AC_loader.restore(sess, saved_models_dir + path_sep + 'AC' + path_sep + 'AC_model')
+    # AC_loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + 'AC' + path_sep + "AC_model.meta")
+    # AC_loader.restore(sess, saved_models_dir + path_sep + 'AC' + path_sep + 'AC_model')
 
     solved = False
     # saver = tf.compat.v1.train.Saver()
