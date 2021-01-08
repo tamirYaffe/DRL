@@ -37,13 +37,13 @@ class StateValueNetwork:
             self.value = tf.compat.v1.placeholder(tf.int32, 1, name="value")
             self.R_t = tf.compat.v1.placeholder(tf.float32, name="total_rewards")
 
-            self.W1 = tf.compat.v1.get_variable("AC_W1", [self.state_size, 12],
+            self.W1 = tf.compat.v1.get_variable("AC_W1", [self.state_size, 32],
                                                 initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
                                                                                                             mode="fan_avg",
                                                                                                             distribution="uniform",
                                                                                                             seed=0))
-            self.b1 = tf.compat.v1.get_variable("AC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
-            self.W2 = tf.compat.v1.get_variable("AC_W2", [12, 1],
+            self.b1 = tf.compat.v1.get_variable("AC_b1", [32], initializer=tf.compat.v1.zeros_initializer())
+            self.W2 = tf.compat.v1.get_variable("AC_W2", [32, 1],
                                                 initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
                                                                                                             mode="fan_avg",
                                                                                                             distribution="uniform",
@@ -72,13 +72,13 @@ class PolicyNetwork:
             self.action = tf.compat.v1.placeholder(tf.int32, [self.action_size], name="action")
             self.R_t = tf.compat.v1.placeholder(tf.float32, name="total_rewards")
 
-            self.W1 = tf.compat.v1.get_variable("AC_W1", [self.state_size, 12],
+            self.W1 = tf.compat.v1.get_variable("AC_W1", [self.state_size, 32],
                                                 initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
                                                                                                             mode="fan_avg",
                                                                                                             distribution="uniform",
                                                                                                             seed=0))
-            self.b1 = tf.compat.v1.get_variable("AC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
-            self.W2 = tf.compat.v1.get_variable("AC_W2", [12, self.action_size],
+            self.b1 = tf.compat.v1.get_variable("AC_b1", [32], initializer=tf.compat.v1.zeros_initializer())
+            self.W2 = tf.compat.v1.get_variable("AC_W2", [32, self.action_size],
                                                 initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
                                                                                                             mode="fan_avg",
                                                                                                             distribution="uniform",
@@ -146,11 +146,11 @@ def remove_actions_padding(actions):
 with tf.compat.v1.Session() as sess:
     sess.run(tf.compat.v1.global_variables_initializer())
 
-    saver = tf.compat.v1.train.Saver()
+    # saver = tf.compat.v1.train.Saver()
 
     # load model
-    # loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + "AC_model.meta")
-    # loader.restore(sess, saved_models_dir + path_sep + 'AC_model')
+    loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + "AC_model.meta")
+    loader.restore(sess, saved_models_dir + path_sep + 'AC_model')
 
     solved = False
     Transition = collections.namedtuple("Transition", ["state", "action", "reward", "next_state",
@@ -226,7 +226,7 @@ with tf.compat.v1.Session() as sess:
 
         if solved:
             # save models
-            saver.save(sess, saved_models_dir + path_sep + "AC_model")
+            # saver.save(sess, saved_models_dir + path_sep + "AC_model")
             break
 
         # Compute Rt for each time-step t and update the network's weights
