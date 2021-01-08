@@ -51,24 +51,36 @@ class StateValueNetwork:
     def __init__(self, state_size, learning_rate, name='state_value_network'):
         self.state_size = state_size
         self.learning_rate = learning_rate
-        self.n_hidden1 = 400
-        self.n_hidden2 = 400
-        self.init_xavier = tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg",
-                                                                           distribution="uniform")
 
         with tf.compat.v1.variable_scope(name):
             self.state = tf.compat.v1.placeholder(tf.float32, [None, self.state_size], name="state")
             self.value = tf.compat.v1.placeholder(tf.int32, 1, name="value")
             self.R_t = tf.compat.v1.placeholder(tf.float32, name="total_rewards")
 
-            self.hidden1 = tf.compat.v1.layers.dense(self.state, self.n_hidden1,
-                                                     tf.nn.elu, self.init_xavier)
-            self.hidden2 = tf.compat.v1.layers.dense(self.hidden1, self.n_hidden2,
-                                                     tf.nn.elu, self.init_xavier)  # (batch_size, 400)
+            self.W1 = tf.compat.v1.get_variable("MC_W1", [self.state_size, 12],
+                                                initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
+                                                                                                            mode="fan_avg",
+                                                                                                            distribution="uniform",
+                                                                                                            seed=0))
+            self.b1 = tf.compat.v1.get_variable("MC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
+            self.W2 = tf.compat.v1.get_variable("MC_W2", [12, 1],
+                                                initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
+                                                                                                            mode="fan_avg",
+                                                                                                            distribution="uniform",
+                                                                                                            seed=0))
+            self.b2 = tf.compat.v1.get_variable("MC_b2", [1], initializer=tf.compat.v1.zeros_initializer())
+
+            self.Z1 = tf.add(tf.matmul(self.state, self.W1), self.b1)
+            self.A1 = tf.nn.relu(self.Z1)  # (batch_size, 12)
+
             # adding pre-trained layers
             # CartPole
             self.CP_W1 = tf.compat.v1.get_variable("CP_W1", [self.state_size, 12],
-                                                initializer=self.init_xavier)
+                                                   initializer=tf.compat.v1.keras.initializers.VarianceScaling(
+                                                       scale=1.0,
+                                                       mode="fan_avg",
+                                                       distribution="uniform",
+                                                       seed=0))
 
             self.CP_b1 = tf.compat.v1.get_variable("CP_b1", [12], initializer=tf.compat.v1.zeros_initializer())
 
@@ -77,7 +89,11 @@ class StateValueNetwork:
 
             # Acrobot
             self.AC_W1 = tf.compat.v1.get_variable("AC_W1", [self.state_size, 12],
-                                                   initializer=self.init_xavier)
+                                                   initializer=tf.compat.v1.keras.initializers.VarianceScaling(
+                                                       scale=1.0,
+                                                       mode="fan_avg",
+                                                       distribution="uniform",
+                                                       seed=0))
 
             self.AC_b1 = tf.compat.v1.get_variable("AC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
 
@@ -85,11 +101,12 @@ class StateValueNetwork:
             self.AC_A1 = tf.nn.relu(self.AC_Z1)  # (batch_size, 12)
 
             # concat layers
-            self.concat_layer = tf.concat([self.hidden2, self.CP_A1, self.AC_A1], axis=1)  # (batch_size, 424)
+            self.concat_layer = tf.concat([self.A1, self.CP_A1, self.AC_A1], axis=1)  # (batch_size, 36)
 
-            self.state_value = tf.compat.v1.layers.dense(self.concat_layer, 1,
-                                                         kernel_initializer=self.init_xavier)
+            self.output = tf.add(tf.matmul(self.concat_layer, self.W2), self.b2)
 
+            # state value estimation
+            self.state_value = tf.squeeze(self.output)
             # Loss
             self.loss = tf.reduce_mean(tf.math.squared_difference(self.state_value, self.R_t))
             self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.loss)
@@ -100,8 +117,6 @@ class PolicyNetwork:
         self.state_size = state_size
         self.action_size = action_size
         self.learning_rate = learning_rate
-        self.n_hidden1 = 40
-        self.n_hidden2 = 40
         self.init_xavier = tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0, mode="fan_avg",
                                                                            distribution="uniform")
         with tf.compat.v1.variable_scope(name):
@@ -109,35 +124,54 @@ class PolicyNetwork:
             self.action = tf.compat.v1.placeholder(tf.int32, [self.action_size], name="action")
             self.R_t = tf.compat.v1.placeholder(tf.float32, name="total_rewards")
 
-            self.hidden1 = tf.compat.v1.layers.dense(self.state, self.n_hidden1,
-                                                     tf.nn.elu, self.init_xavier)
-            self.hidden2 = tf.compat.v1.layers.dense(self.hidden1, self.n_hidden2,
-                                                     tf.nn.elu, self.init_xavier)  # (None, 40)
+            self.W1 = tf.compat.v1.get_variable("MC_W1", [self.state_size, 12],
+                                                initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
+                                                                                                            mode="fan_avg",
+                                                                                                            distribution="uniform",
+                                                                                                            seed=0))
+            self.b1 = tf.compat.v1.get_variable("MC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
+            self.W2 = tf.compat.v1.get_variable("MC_W2", [12, self.action_size],
+                                                initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
+                                                                                                            mode="fan_avg",
+                                                                                                            distribution="uniform",
+                                                                                                            seed=0))
+            self.b2 = tf.compat.v1.get_variable("MC_b2", [self.action_size],
+                                                initializer=tf.compat.v1.zeros_initializer())
+
+            self.Z1 = tf.add(tf.matmul(self.state, self.W1), self.b1)
+            self.A1 = tf.nn.relu(self.Z1)
 
             # adding pre-trained layers
             # CartPole
             self.CP_W1 = tf.compat.v1.get_variable("CP_W1", [self.state_size, 12],
-                                                   initializer=self.init_xavier)
+                                                   initializer=tf.compat.v1.keras.initializers.VarianceScaling(
+                                                       scale=1.0,
+                                                       mode="fan_avg",
+                                                       distribution="uniform",
+                                                       seed=0))
 
             self.CP_b1 = tf.compat.v1.get_variable("CP_b1", [12], initializer=tf.compat.v1.zeros_initializer())
 
             self.CP_Z1 = tf.add(tf.matmul(self.state, self.CP_W1), self.CP_b1)
-            self.CP_A1 = tf.nn.relu(self.CP_Z1)  # (None, 12)
+            self.CP_A1 = tf.nn.relu(self.CP_Z1)  # (batch_size, 12)
 
             # Acrobot
             self.AC_W1 = tf.compat.v1.get_variable("AC_W1", [self.state_size, 12],
-                                                   initializer=self.init_xavier)
+                                                   initializer=tf.compat.v1.keras.initializers.VarianceScaling(
+                                                       scale=1.0,
+                                                       mode="fan_avg",
+                                                       distribution="uniform",
+                                                       seed=0))
 
             self.AC_b1 = tf.compat.v1.get_variable("AC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
 
             self.AC_Z1 = tf.add(tf.matmul(self.state, self.AC_W1), self.AC_b1)
-            self.AC_A1 = tf.nn.relu(self.AC_Z1)  # (None, 12)
+            self.AC_A1 = tf.nn.relu(self.AC_Z1)  # (batch_size, 12)
 
             # concat layers
-            self.concat_layer = tf.concat([self.hidden2, self.CP_A1, self.AC_A1], axis=1)  # (None, 64)
+            self.concat_layer = tf.concat([self.A1, self.CP_A1, self.AC_A1], axis=1)  # (batch_size, 36)
 
-            self.output = tf.compat.v1.layers.dense(self.concat_layer, action_size,
-                                                    kernel_initializer=self.init_xavier)
+            self.output = tf.add(tf.matmul(self.concat_layer, self.W2), self.b2)
 
             self.mu = tf.compat.v1.layers.dense(self.output, 1,
                                                 None, self.init_xavier)
@@ -163,7 +197,7 @@ max_episodes = 5000
 max_steps = 999
 discount_factor = 0.99
 # learning_rate = 0.0001
-lr_actor = 0.00002  # set learning rates
+lr_actor = 0.0002  # set learning rates
 lr_critic = 0.001
 
 n_step = 20
@@ -194,15 +228,15 @@ with tf.compat.v1.Session() as sess:
 
     # load pre-trained values
     # CartPole
-    CP_loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + "CP_model.meta")
-    CP_loader.restore(sess, saved_models_dir + path_sep + 'CP_model')
+    CP_loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + 'CP' + path_sep + "CP_model.meta")
+    CP_loader.restore(sess, saved_models_dir + path_sep + 'CP' + path_sep + "CP_model")
 
     # Acrobot
-    AC_loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + "AC_model.meta")
-    AC_loader.restore(sess, saved_models_dir + path_sep + 'AC_model')
+    AC_loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + 'AC' + path_sep + "AC_model.meta")
+    AC_loader.restore(sess, saved_models_dir + path_sep + 'AC' + path_sep + 'AC_model')
 
     solved = False
-    saver = tf.compat.v1.train.Saver()
+    # saver = tf.compat.v1.train.Saver()
 
     episode_rewards = np.zeros(max_episodes)
     average_rewards = 0.0
@@ -275,9 +309,8 @@ with tf.compat.v1.Session() as sess:
 
         if solved:
             # save models
-            saver.save(sess, saved_models_dir + path_sep + "MCC_model")
+            # saver.save(sess, saved_models_dir + path_sep + 'MCC' + path_sep + "MCC_model")
             break
-
 
 end_time = time.time()
 print("total time to converge: {}".format(end_time - start_time))
