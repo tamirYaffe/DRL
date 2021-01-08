@@ -149,8 +149,8 @@ with tf.compat.v1.Session() as sess:
     saver = tf.compat.v1.train.Saver()
 
     # load model
-    # loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + "CP_model.meta")
-    # loader.restore(sess, saved_models_dir + path_sep + 'CP_model')
+    # loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + 'CP' + path_sep + "CP_model.meta")
+    # loader.restore(sess, saved_models_dir + path_sep + 'CP' + path_sep + "CP_model")
 
     solved = False
     Transition = collections.namedtuple("Transition", ["state", "action", "reward", "next_state",
@@ -226,7 +226,7 @@ with tf.compat.v1.Session() as sess:
 
         if solved:
             # save models
-            saver.save(sess, saved_models_dir + path_sep + "CP_model")
+            saver.save(sess, saved_models_dir + path_sep + 'CP' + path_sep + "CP_model")
             break
 
         # Compute Rt for each time-step t and update the network's weights
