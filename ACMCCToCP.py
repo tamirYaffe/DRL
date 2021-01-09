@@ -166,7 +166,7 @@ global_action_size = 3
 max_episodes = 5000
 max_steps = 501
 discount_factor = 0.99
-learning_rate = 0.0004
+learning_rate = 0.0002
 
 n_step = 100
 render = False
