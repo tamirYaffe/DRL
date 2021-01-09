@@ -43,7 +43,7 @@ class StateValueNetwork:
                                                                                                             distribution="uniform",
                                                                                                             seed=0))
             self.b1 = tf.compat.v1.get_variable("CP_b1", [12], initializer=tf.compat.v1.zeros_initializer())
-            self.W2 = tf.compat.v1.get_variable("CP_W2", [12, 1],
+            self.W2 = tf.compat.v1.get_variable("CP_W2", [36, 1],
                                                 initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
                                                                                                             mode="fan_avg",
                                                                                                             distribution="uniform",
@@ -52,7 +52,38 @@ class StateValueNetwork:
 
             self.Z1 = tf.add(tf.matmul(self.state, self.W1), self.b1)
             self.A1 = tf.nn.relu(self.Z1)
-            self.output = tf.add(tf.matmul(self.A1, self.W2), self.b2)
+
+            # adding pre-trained layers
+            # Acrobot
+            self.AC_W1 = tf.compat.v1.get_variable("AC_W1", [self.state_size, 12],
+                                                   initializer=tf.compat.v1.keras.initializers.VarianceScaling(
+                                                       scale=1.0,
+                                                       mode="fan_avg",
+                                                       distribution="uniform",
+                                                       seed=0))
+
+            self.AC_b1 = tf.compat.v1.get_variable("AC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
+
+            self.AC_Z1 = tf.add(tf.matmul(self.state, self.AC_W1), self.AC_b1)
+            self.AC_A1 = tf.nn.relu(self.AC_Z1)  # (batch_size, 12)
+
+            # MountainCarContinuous
+            self.MC_W1 = tf.compat.v1.get_variable("MC_W1", [self.state_size, 12],
+                                                   initializer=tf.compat.v1.keras.initializers.VarianceScaling(
+                                                       scale=1.0,
+                                                       mode="fan_avg",
+                                                       distribution="uniform",
+                                                       seed=0))
+
+            self.MC_b1 = tf.compat.v1.get_variable("MC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
+
+            self.MC_Z1 = tf.add(tf.matmul(self.state, self.AC_W1), self.AC_b1)
+            self.MC_A1 = tf.nn.relu(self.AC_Z1)  # (batch_size, 12)
+
+            # concat layers
+            self.concat_layer = tf.concat([self.A1, self.MC_A1, self.AC_A1], axis=1)  # (batch_size, 36)
+
+            self.output = tf.add(tf.matmul(self.concat_layer, self.W2), self.b2)
 
             # state value estimation
             self.state_value = tf.squeeze(self.output)
@@ -78,7 +109,7 @@ class PolicyNetwork:
                                                                                                             distribution="uniform",
                                                                                                             seed=0))
             self.b1 = tf.compat.v1.get_variable("CP_b1", [12], initializer=tf.compat.v1.zeros_initializer())
-            self.W2 = tf.compat.v1.get_variable("CP_W2", [12, self.action_size],
+            self.W2 = tf.compat.v1.get_variable("CP_W2", [36, self.action_size],
                                                 initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
                                                                                                             mode="fan_avg",
                                                                                                             distribution="uniform",
@@ -87,7 +118,38 @@ class PolicyNetwork:
 
             self.Z1 = tf.add(tf.matmul(self.state, self.W1), self.b1)
             self.A1 = tf.nn.relu(self.Z1)
-            self.output = tf.add(tf.matmul(self.A1, self.W2), self.b2)
+
+            # adding pre-trained layers
+            # Acrobot
+            self.AC_W1 = tf.compat.v1.get_variable("AC_W1", [self.state_size, 12],
+                                                   initializer=tf.compat.v1.keras.initializers.VarianceScaling(
+                                                       scale=1.0,
+                                                       mode="fan_avg",
+                                                       distribution="uniform",
+                                                       seed=0))
+
+            self.AC_b1 = tf.compat.v1.get_variable("AC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
+
+            self.AC_Z1 = tf.add(tf.matmul(self.state, self.AC_W1), self.AC_b1)
+            self.AC_A1 = tf.nn.relu(self.AC_Z1)  # (batch_size, 12)
+
+            # MountainCarContinuous
+            self.MC_W1 = tf.compat.v1.get_variable("MC_W1", [self.state_size, 12],
+                                                   initializer=tf.compat.v1.keras.initializers.VarianceScaling(
+                                                       scale=1.0,
+                                                       mode="fan_avg",
+                                                       distribution="uniform",
+                                                       seed=0))
+
+            self.MC_b1 = tf.compat.v1.get_variable("MC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
+
+            self.MC_Z1 = tf.add(tf.matmul(self.state, self.AC_W1), self.AC_b1)
+            self.MC_A1 = tf.nn.relu(self.AC_Z1)  # (batch_size, 12)
+
+            # concat layers
+            self.concat_layer = tf.concat([self.A1, self.MC_A1, self.AC_A1], axis=1)  # (batch_size, 36)
+
+            self.output = tf.add(tf.matmul(self.concat_layer, self.W2), self.b2)
 
             # Softmax probability distribution over actions
             self.actions_distribution = tf.squeeze(tf.nn.softmax(self.output))
@@ -149,8 +211,8 @@ with tf.compat.v1.Session() as sess:
     saver = tf.compat.v1.train.Saver()
 
     # load model
-    # loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + 'CP' + path_sep + "CP_model.meta")
-    # loader.restore(sess, saved_models_dir + path_sep + 'CP' + path_sep + "CP_model")
+    loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + 'ACMCC' + path_sep + "ACMCC_model.meta")
+    loader.restore(sess, saved_models_dir + path_sep + 'ACMCC' + path_sep + "ACMCC_model")
 
     solved = False
     Transition = collections.namedtuple("Transition", ["state", "action", "reward", "next_state",
