@@ -98,7 +98,7 @@ class StateValueNetwork:
             self.AC_b1 = tf.compat.v1.get_variable("AC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
 
             self.AC_Z1 = tf.add(tf.matmul(self.state, self.AC_W1), self.AC_b1)
-            self.AC_A1 = tf.nn.relu(self.AC_Z1)  # (batch_size, 28)
+            self.AC_A1 = tf.nn.relu(self.AC_Z1)  # (batch_size, 12)
 
             # concat layers
             self.concat_layer = tf.concat([self.A1, self.CP_A1, self.AC_A1], axis=1)  # (batch_size, 36)
@@ -166,7 +166,7 @@ class PolicyNetwork:
             self.AC_b1 = tf.compat.v1.get_variable("AC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
 
             self.AC_Z1 = tf.add(tf.matmul(self.state, self.AC_W1), self.AC_b1)
-            self.AC_A1 = tf.nn.relu(self.AC_Z1)  # (batch_size, 32)
+            self.AC_A1 = tf.nn.relu(self.AC_Z1)  # (batch_size, 12)
 
             # concat layers
             self.concat_layer = tf.concat([self.A1, self.CP_A1, self.AC_A1], axis=1)  # (batch_size, 36)
