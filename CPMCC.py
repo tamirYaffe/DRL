@@ -69,12 +69,12 @@ class StateValueNetwork:
                                                                                                             distribution="uniform",
                                                                                                             seed=0))
             self.b1 = tf.compat.v1.get_variable("CP_b1", [12], initializer=tf.compat.v1.zeros_initializer())
-            self.W2 = tf.compat.v1.get_variable("CP_W2", [12, 1],
+            self.W2 = tf.compat.v1.get_variable("W2", [12, 1],
                                                 initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
                                                                                                             mode="fan_avg",
                                                                                                             distribution="uniform",
                                                                                                             seed=0))
-            self.b2 = tf.compat.v1.get_variable("CP_b2", [1], initializer=tf.compat.v1.zeros_initializer())
+            self.b2 = tf.compat.v1.get_variable("b2", [1], initializer=tf.compat.v1.zeros_initializer())
 
             self.Z1 = tf.add(tf.matmul(self.state, self.W1), self.b1)
             self.A1 = tf.nn.relu(self.Z1)
@@ -105,12 +105,12 @@ class PolicyNetwork:
                                                                                                             distribution="uniform",
                                                                                                             seed=0))
             self.b1 = tf.compat.v1.get_variable("CP_b1", [12], initializer=tf.compat.v1.zeros_initializer())
-            self.W2 = tf.compat.v1.get_variable("CP_W2", [12, self.action_size],
+            self.W2 = tf.compat.v1.get_variable("W2", [12, self.action_size],
                                                 initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
                                                                                                             mode="fan_avg",
                                                                                                             distribution="uniform",
                                                                                                             seed=0))
-            self.b2 = tf.compat.v1.get_variable("CP_b2", [self.action_size], initializer=tf.compat.v1.zeros_initializer())
+            self.b2 = tf.compat.v1.get_variable("b2", [self.action_size], initializer=tf.compat.v1.zeros_initializer())
 
             self.Z1 = tf.add(tf.matmul(self.state, self.W1), self.b1)
             self.A1 = tf.nn.relu(self.Z1)
