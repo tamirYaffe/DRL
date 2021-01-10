@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 import collections
 path_sep = os.path.sep
-saved_models_dir = 'saved_models'
+saved_models_dir = '/content/drive/Shareddrives/DRL/Ass3/ac_model'
 tf.compat.v1.disable_eager_execution()
 
 env = gym.make('CartPole-v1')
@@ -28,7 +28,7 @@ def plot_history(history):
 
 
 class StateValueNetwork:
-    def __init__(self, state_size, learning_rate, name='state_value_network'):
+    def _init_(self, state_size, learning_rate, name='state_value_network'):
         self.state_size = state_size
         self.learning_rate = learning_rate
 
@@ -37,12 +37,12 @@ class StateValueNetwork:
             self.value = tf.compat.v1.placeholder(tf.int32, 1, name="value")
             self.R_t = tf.compat.v1.placeholder(tf.float32, name="total_rewards")
 
-            self.W1 = tf.compat.v1.get_variable("CP_W1", [self.state_size, 12],
+            self.W1 = tf.compat.v1.get_variable("AC_W1", [self.state_size, 12],
                                                 initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
                                                                                                             mode="fan_avg",
                                                                                                             distribution="uniform",
                                                                                                             seed=0))
-            self.b1 = tf.compat.v1.get_variable("CP_b1", [12], initializer=tf.compat.v1.zeros_initializer())
+            self.b1 = tf.compat.v1.get_variable("AC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
             self.W2 = tf.compat.v1.get_variable("CP_W2", [12, 1],
                                                 initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
                                                                                                             mode="fan_avg",
@@ -62,7 +62,7 @@ class StateValueNetwork:
 
 
 class PolicyNetwork:
-    def __init__(self, state_size, action_size, learning_rate, name='policy_network'):
+    def _init_(self, state_size, action_size, learning_rate, name='policy_network'):
         self.state_size = state_size
         self.action_size = action_size
         self.learning_rate = learning_rate
@@ -72,12 +72,12 @@ class PolicyNetwork:
             self.action = tf.compat.v1.placeholder(tf.int32, [self.action_size], name="action")
             self.R_t = tf.compat.v1.placeholder(tf.float32, name="total_rewards")
 
-            self.W1 = tf.compat.v1.get_variable("CP_W1", [self.state_size, 12],
+            self.W1 = tf.compat.v1.get_variable("AC_W1", [self.state_size, 12],
                                                 initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
                                                                                                             mode="fan_avg",
                                                                                                             distribution="uniform",
                                                                                                             seed=0))
-            self.b1 = tf.compat.v1.get_variable("CP_b1", [12], initializer=tf.compat.v1.zeros_initializer())
+            self.b1 = tf.compat.v1.get_variable("AC_b1", [12], initializer=tf.compat.v1.zeros_initializer())
             self.W2 = tf.compat.v1.get_variable("CP_W2", [12, self.action_size],
                                                 initializer=tf.compat.v1.keras.initializers.VarianceScaling(scale=1.0,
                                                                                                             mode="fan_avg",
@@ -146,7 +146,7 @@ def remove_actions_padding(actions):
 with tf.compat.v1.Session() as sess:
     sess.run(tf.compat.v1.global_variables_initializer())
 
-    saver = tf.compat.v1.train.Saver()
+    # saver = tf.compat.v1.train.Saver()
 
     # load model
     loader = tf.compat.v1.train.import_meta_graph(saved_models_dir + path_sep + 'AC' + path_sep + "AC_model.meta")
@@ -243,7 +243,7 @@ with tf.compat.v1.Session() as sess:
 
         if solved:
             # save models
-            saver.save(sess, saved_models_dir + path_sep + 'CP' + path_sep + "CP_model")
+            # saver.save(sess, saved_models_dir + path_sep + 'CP' + path_sep + "CP_model")
             break
 
         # Compute Rt for each time-step t and update the network's weights
